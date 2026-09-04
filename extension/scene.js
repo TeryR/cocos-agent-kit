@@ -407,6 +407,11 @@ module.exports = {
       const scene = cc.director.getScene();
       const node = scene && findByUuid(scene, args && args.uuid);
       if (!node) return { error: 'node not found: ' + (args && args.uuid) };
+      // 先查重:unique 组件(如 Canvas)重复挂载时报错更明确
+      const existing = node.getComponent(args.type);
+      if (existing) {
+        return { error: 'component already exists on node: ' + args.type };
+      }
       let comp;
       try {
         comp = node.addComponent(args.type);
@@ -420,7 +425,7 @@ module.exports = {
         }
       }
       if (!comp) {
-        return { error: 'addComponent failed: ' + args.type + ' (class not registered? 先 refresh_assets 触发编译)' };
+        return { error: 'addComponent failed: ' + args.type + ' (class not found / not compiled? 先 refresh_assets 触发编译)' };
       }
       try {
         if (args.props) applyProps(comp, args.props);
@@ -448,6 +453,10 @@ module.exports = {
       if (!node) return { error: 'node not found: ' + (args && args.uuid) };
       const comp = findComponent(node, args.component);
       if (!comp) return { error: 'component not found: ' + args.component, available: componentNames(node) };
+      // 校验:属性必须已存在于组件上,拒绝在组件对象上凭空创建字段
+      if (comp[args.prop] === undefined && !(args.prop in comp)) {
+        return { error: 'property not found on component: ' + args.prop };
+      }
       try {
         applyProps(comp, { [args.prop]: args.value });
       } catch (e) {

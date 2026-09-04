@@ -18,8 +18,12 @@ function projectRoot() {
 
 function dbToPath(url) {
   if (typeof url !== 'string' || !url.startsWith('db://assets/')) return null;
-  const p = path.join(projectRoot(), 'assets', url.slice('db://assets/'.length));
-  return p;
+  const rel = url.slice('db://assets/'.length);
+  // 安全:规范化后必须仍位于 assets/ 内,拒绝 ../ 路径穿越
+  const assetsRoot = path.normalize(path.join(projectRoot(), 'assets'));
+  const full = path.normalize(path.join(assetsRoot, rel));
+  if (full !== assetsRoot && !full.startsWith(assetsRoot + path.sep)) return null;
+  return full;
 }
 
 function readJSON(p) {
