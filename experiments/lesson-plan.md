@@ -14,7 +14,7 @@
 | 组别 | 操作方式 | 感知方式 | 需要准备 |
 |---|---|---|---|
 | A 纯 GUI | 截图 + 坐标点击 + 拖拽 | 仅视觉模型 | computer-use 环境(ZCode / UI-TARS Desktop / Claude Computer Use) |
-| B GUI + 感知 | 同 A | A + cocos-sense(操作后必调 `selected_nodes` / `scene_tree` 回读) | A + 本扩展 |
+| B GUI + 感知 | 同 A | A + cocos-agent-kit(操作后必调 `selected_nodes` / `scene_tree` 回读) | A + 本扩展 |
 | C 文件直写 | 直接生成/修改 `.scene` `.prefab` `.ts` | asset-db 自动刷新 + 构建验证 | 任意编程 Agent |
 
 B 组操作规程(关键):**每次 GUI 操作后必须回读**——点选后查 `selected_nodes` 比对 UUID;结构调整后查 `scene_tree` 比对节点存在性与坐标;失败则基于真值重试,禁止凭截图"感觉对了"。
@@ -60,7 +60,7 @@ B 组操作规程(关键):**每次 GUI 操作后必须回读**——点选后查
 
 ## 环境清单
 
-- [ ] Cocos Creator 3.8.x + cocos-sense 扩展已加载,`/health` 通过,校准清单全绿
+- [ ] Cocos Creator 3.8.x + cocos-agent-kit 扩展已加载,`/health` 通过,校准清单全绿
 - [ ] GUI Agent 环境可截屏并控制鼠标键盘(本机或虚拟机)
 - [ ] 示例项目:含若干 prefab 与贴图的空 2D 模板项目
 - [ ] 计数工具:GUI 步数与 VLM 轮数的统计方式(Agent 日志)

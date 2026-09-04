@@ -6,12 +6,26 @@
 
 const { dbToPath, ccclassOf } = require('./asset-inspect');
 
+// 挂起保护:编辑器忙时 execute-scene-script 可能长时间不返回(实测于 asset-db 刷新期)。
+// 超时后向 Agent 返回结构化错误;注意写操作可能已实际生效,重试前应先 scene_tree 核对。
+const SCENE_TIMEOUT = 30000;
+
+function withTimeout(promise, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(
+      label + ' timeout after ' + SCENE_TIMEOUT / 1000 + 's (editor busy?). ' +
+      '写操作可能已生效:重试前先 scene_tree 核对'
+    )), SCENE_TIMEOUT)),
+  ]);
+}
+
 function sceneScript(method, args) {
-  return Editor.Message.request('scene', 'execute-scene-script', {
-    name: 'cocos-sense',
+  return withTimeout(Editor.Message.request('scene', 'execute-scene-script', {
+    name: 'cocos-agent-kit',
     method,
     args: [args || {}],
-  });
+  }), 'scene:' + method);
 }
 
 function textResult(obj) {

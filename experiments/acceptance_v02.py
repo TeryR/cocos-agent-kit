@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """v0.2 验收脚本:沿地图对角线自动创建 5 个金币,并回读自检。
 用法:python acceptance_v02.py
-前置:cocos-sense 扩展已加载,7420 端口可用,场景已打开。
+前置:cocos-agent-kit 扩展已加载,7420 端口可用,场景已打开。
 """
 import json
 import urllib.request

@@ -1,4 +1,4 @@
-# cocos-sense — AI Agent 的 Cocos Creator 感知与操作层
+# cocos-agent-kit — AI Agent 的 Cocos Creator 感知与操作层
 
 > 让你的 AI Agent(Claude Code / Cursor / Cline / ZCode…)**看见并操作** Cocos Creator 编辑器:
 > 读取场景结构、节点坐标、组件属性、资产引用;创建节点、挂组件、改属性、保存场景、刷新资产——
@@ -18,12 +18,12 @@
 
 ### 第 1 步:安装扩展
 
-把本仓库的 `extension/` 文件夹整体拷贝到你项目的 `extensions/cocos-sense/`(没有 `extensions` 目录就新建):
+把本仓库的 `extension/` 文件夹整体拷贝到你项目的 `extensions/cocos-agent-kit/`(没有 `extensions` 目录就新建):
 
 ```
 你的项目/
 └── extensions/
-    └── cocos-sense/        ← extension/ 的内容
+    └── cocos-agent-kit/        ← extension/ 的内容
         ├── package.json
         ├── main.js
         └── ...
@@ -31,37 +31,37 @@
 
 ### 第 2 步:启用
 
-打开/刷新项目——项目内扩展**默认自动启用**。若没启用,扩展管理器 → 扩展 → cocos-sense → 开关打开。
+打开/刷新项目——项目内扩展**默认自动启用**。若没启用,扩展管理器 → 扩展 → cocos-agent-kit → 开关打开。
 
 ### 第 3 步:验证服务
 
 ```bash
 curl http://127.0.0.1:7420/health
-# {"ok":true,"server":{"name":"cocos-sense","version":"0.4.0"}}
+# {"ok":true,"server":{"name":"cocos-agent-kit","version":"0.4.0"}}
 ```
 
 ### 第 4 步:接入你的 Agent
 
 **Claude Code:**
 ```bash
-claude mcp add --transport http cocos-sense http://127.0.0.1:7420/mcp
+claude mcp add --transport http cocos-agent-kit http://127.0.0.1:7420/mcp
 ```
 
 **Cursor / Cline 等**(mcp.json):
 ```json
 {
   "mcpServers": {
-    "cocos-sense": { "url": "http://127.0.0.1:7420/mcp" }
+    "cocos-agent-kit": { "url": "http://127.0.0.1:7420/mcp" }
   }
 }
 ```
 
 ### 第 5 步:安装 Skill(强烈推荐)
 
-工具是能力,[`skills/cocos-sense/SKILL.md`](skills/cocos-sense/SKILL.md) 是使用这些能力的作业指导书:
+工具是能力,[`skills/cocos-agent-kit/SKILL.md`](skills/cocos-agent-kit/SKILL.md) 是使用这些能力的作业指导书:
 感知→操作→验证→保存的工作流纪律、坐标系与设计分辨率知识、语义定位配方、资源异常诊断指引。
 
-- **Claude Code**:拷到 `~/.claude/skills/cocos-sense/SKILL.md`(全局)或项目 `.claude/skills/cocos-sense/SKILL.md`
+- **Claude Code**:拷到 `~/.claude/skills/cocos-agent-kit/SKILL.md`(全局)或项目 `.claude/skills/cocos-agent-kit/SKILL.md`
 - **ZCode / 其他支持 Agent Skills 的客户端**:同理放入其 skills 目录
 
 ### 第 6 步:冒烟测试
@@ -129,12 +129,12 @@ claude mcp add --transport http cocos-sense http://127.0.0.1:7420/mcp
 ```
 ┌──────────────────────────────────────────────┐
 │      你的 AI Agent(Claude / Cursor / ZCode)   │
-│        + cocos-sense skill(作业指导书)          │
+│        + cocos-agent-kit skill(作业指导书)          │
 └────────────┬─────────────────────────────────┘
              │ MCP(Streamable HTTP)
              ▼  http://127.0.0.1:7420/mcp
 ┌──────────────────────────────────────────────┐
-│  cocos-sense 扩展(Cocos Creator 3.8.x)        │
+│  cocos-agent-kit 扩展(Cocos Creator 3.8.x)        │
 │  ├─ 信息原语:场景树/属性值/资产解剖/日志/引用    │
 │  └─ 操作原语:act_*(回读内建)/保存/刷新/构建     │
 └────────────┬─────────────────────────────────┘

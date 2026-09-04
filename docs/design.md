@@ -1,4 +1,4 @@
-# cocos-sense 设计文档
+# cocos-agent-kit 设计文档
 
 ## 决策记录(ADR)
 

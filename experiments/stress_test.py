@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""cocos-sense 边界/极限/安全测试套件。
+"""cocos-agent-kit 边界/极限/安全测试套件。
 分类:INPUT(非法输入) / STATE(状态边界) / PROTO(协议层) / SECURITY(安全) / DANGER(破坏性,默认跳过)
 每用例记录:行为分类 OK(优雅报错) / QUIRK(静默容错,记录行为) / BREAK(崩溃或破坏)
 用法:python stress_test.py [--include-danger]

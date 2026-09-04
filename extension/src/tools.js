@@ -7,11 +7,18 @@ const { TOOLS_BASE, dispatchBase } = require('./tools-base');
 const assetInspect = require('./asset-inspect');
 
 function sceneScript(method, args) {
-  return Editor.Message.request('scene', 'execute-scene-script', {
-    name: 'cocos-sense',
-    method,
-    args: [args || {}],
-  });
+  const SCENE_TIMEOUT = 30000;
+  return Promise.race([
+    Editor.Message.request('scene', 'execute-scene-script', {
+      name: 'cocos-agent-kit',
+      method,
+      args: [args || {}],
+    }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error(
+      'scene:' + method + ' timeout after ' + SCENE_TIMEOUT / 1000 + 's (editor busy?). ' +
+      '写操作可能已生效:重试前先 scene_tree 核对'
+    )), SCENE_TIMEOUT)),
+  ]);
 }
 
 function textResult(obj) {

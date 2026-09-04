@@ -1,11 +1,11 @@
 ---
-name: cocos-sense
-description: 使用 cocos-sense MCP 工具操作 Cocos Creator 编辑器时使用本技能。涵盖场景感知、节点创建/修改/删除/移动、组件管理(含自定义脚本)、资产引用与引用诊断、场景创建、prefab 实例化、保存与构建。当用户要求在 Cocos 中搭建/修改场景、创建角色或关卡、查询场景结构、修复资源引用时,先读本技能再动手。
+name: cocos-agent-kit
+description: 使用 cocos-agent-kit MCP 工具操作 Cocos Creator 编辑器时使用本技能。涵盖场景感知、节点创建/修改/删除/移动、组件管理(含自定义脚本)、资产引用与引用诊断、场景创建、prefab 实例化、保存与构建。当用户要求在 Cocos 中搭建/修改场景、创建角色或关卡、查询场景结构、修复资源引用时,先读本技能再动手。
 ---
 
-# cocos-sense:Cocos Creator 编辑器操作指南
+# cocos-agent-kit:Cocos Creator 编辑器操作指南
 
-通过 cocos-sense MCP 工具(24 个)操作 Cocos Creator 3.8.x 编辑器。核心循环:**感知 → 计划 → act → verify → save**,每一步都基于工具返回的真实状态,禁止凭截图或想象判断编辑器状态。
+通过 cocos-agent-kit MCP 工具(24 个)操作 Cocos Creator 3.8.x 编辑器。核心循环:**感知 → 计划 → act → verify → save**,每一步都基于工具返回的真实状态,禁止凭截图或想象判断编辑器状态。
 
 ## 铁律(违反=返工或事故)
 
@@ -64,7 +64,7 @@ description: 使用 cocos-sense MCP 工具操作 Cocos Creator 编辑器时使�
 
 **资源显示异常(色块/白块/贴图丢失)**:典型根因是 spriteFrame 引用断裂。工作流:
 1. `inspect_asset {url, resolve: true}` 读该实体的 prefab——`brokenCount > 0` 即实锤,断链 uuid 与归属路径直接列出;
-2. 修复 = 把断裂 uuid 替换为目标贴图的 spriteFrame 子资产 uuid(方法见 cocos-sense 仓库 `docs/knowledge-cocos-format.md`,含脚本范本 fix_fruit_refs.py);
+2. 修复 = 把断裂 uuid 替换为目标贴图的 spriteFrame 子资产 uuid(方法见 cocos-agent-kit 仓库 `docs/knowledge-cocos-format.md`,含脚本范本 fix_fruit_refs.py);
 3. `refresh_assets` → 用户肉眼验收。
 完整格式知识(prefab JSON 结构、meta subMetas/f9941 规则、uuid 比对方法)同样在该文档。
 

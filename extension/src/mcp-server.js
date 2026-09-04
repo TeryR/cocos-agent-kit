@@ -118,14 +118,18 @@ class McpHttpServer {
           if (isNotification) return undefined;
           return { jsonrpc: '2.0', id, result };
         } catch (err) {
+          const msg = String((err && err.message) || err);
+          // 未知工具是参数错误(-32602),其余是工具执行错误(isError result)
+          if (/unknown tool/i.test(msg)) {
+            if (isNotification) return undefined;
+            return { jsonrpc: '2.0', id, error: { code: -32602, message: msg } };
+          }
           if (isNotification) return undefined;
           return {
             jsonrpc: '2.0',
             id,
             result: {
-              content: [
-                { type: 'text', text: 'tool error: ' + String((err && err.message) || err) },
-              ],
+              content: [{ type: 'text', text: 'tool error: ' + msg }],
               isError: true,
             },
           };
