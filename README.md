@@ -138,6 +138,14 @@ claude mcp add --transport http cocos-sense http://127.0.0.1:7420/mcp
 
 对你的 Agent 说:**"列出当前 Cocos 场景的节点树"**。它调用 `scene_tree` 并返回真实场景数据(节点名/UUID/世界坐标/组件)= 全链路打通。
 
+### 第 6 步(推荐):安装 Skill,让 Agent 会"正确地"用这些工具
+
+工具只是能力,`skills/cocos-sense/SKILL.md` 是使用这些能力的作业指导书:感知→操作→验证→保存的工作流、坐标系与设计分辨率知识、act-then-verify 铁律、资源显示异常的诊断指引。
+
+- **Claude Code**:拷贝到 `~/.claude/skills/cocos-sense/SKILL.md`(全局)或项目 `.claude/skills/cocos-sense/SKILL.md`(项目级);
+- **ZCode / 其他支持 Agent Skills 规范的客户端**:同理放入其 skills 目录;
+- 不装也能用(工具是标准的),但装上后 Agent 少走弯路:先感知后动手、检查回读、保存习惯、坐标换算——这些纪律都写在里面。
+
 ### 排查表
 
 | 症状 | 原因与解法 |
