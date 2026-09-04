@@ -5,6 +5,7 @@
 
 const { TOOLS_BASE, dispatchBase } = require('./tools-base');
 const assetInspect = require('./asset-inspect');
+const { buildMetaIndex } = require('./asset-inspect');
 
 function sceneScript(method, args) {
   const SCENE_TIMEOUT = 30000;
@@ -237,7 +238,18 @@ const DISPATCH_EXTRA = {
       path: args.path,
       dump: args.dump,
     });
-    return textResult({ set: true, path: args.path, result: result === undefined ? null : result });
+    // 数据完整性提示:资产引用若指向项目外(internal/无效),编辑器可见但预览运行时加载失败
+    let warning = null;
+    try {
+      const ref = (args.dump && args.dump.value && args.dump.value.uuid) || '';
+      if (ref) {
+        const main = ref.split('@')[0];
+        const { buildMetaIndex } = require('./asset-inspect');
+        const known = main in buildMetaIndex();
+        if (!known) warning = 'reference uuid is NOT in project assets (internal/invalid?) — editor can show it but the PREVIEW will fail to load. Prefer db://assets assets.';
+      }
+    } catch (e) { /* 校验失败不阻塞赋值 */ }
+    return textResult({ set: true, path: args.path, warning, result: result === undefined ? null : result });
   },
   query_nodes_by_asset: async (args) => {
     if (!args || !args.uuid) throw new Error('uuid is required');

@@ -18,6 +18,15 @@
 - 判断"引用断裂"的方法:取引用串 `@` 前的主 uuid,全项目搜 `.png.meta` 顶层 uuid 是否存在;**不能**拿完整引用串去搜。
 - 色块(白块被 tint)= spriteFrame 引用断裂的典型症状。
 
+## 2.5 internal 资产引用的预览陷阱(实测)
+
+- 给 Sprite 赋 **db://internal 内置图**(如 default_sprite_splash)的引用:编辑器里正常显示,
+  但**预览运行时报 `asset can't be load: <uuid>`**,Sprite 渲染异常(用户看到异常色块)。
+- 原因:internal 资产不进用户项目的预览资源包;`set-property` 会接受任意 uuid 写入(赋值"成功"是假象)。
+- **规则:spriteFrame 必须引用 db://assets 内的真实图片资产。**零素材时:代码生成纯色 PNG 写入项目
+  (纯 python zlib+struct 即可手写 PNG)→ refresh_assets → 引用其 @f9941 子资产 → 节点 color 染色。
+- 校验习惯:赋值后 `inspect_asset {resolve:true}` 查 brokenCount,或看 console_logs 的 asset can't be load。
+
 ## 3. 诊断工作流(资源显示异常类)
 
 1. 先查图片文件本身:`head -c 4` 应为 `89 50 4E 47`(PNG 魔数);若是 `version https://git-lfs...` 文本 = LFS 没拉;

@@ -56,7 +56,10 @@ description: 使用 cocos-agent-kit MCP 工具操作 Cocos Creator 编辑器时�
  "margin": {"right": 60, "top": 120}, "color": [255, 200, 0],
  "components": [{"type": "cc.Label", "props": {"string": "¥", "fontSize": 30}}]}
 ```
-无资产依赖的可见物用 `cc.Label`;Sprite 的 spriteFrame 资产引用设置暂不支持,引导用户手动设置。
+可见物两选:`cc.Label`(文字,零资产)或 `cc.Sprite`+**项目内贴图**——
+  spriteFrame 经 act_set_property 官方通道设置:path `__comps__.<Sprite组件索引>._spriteFrame`,
+  dump `{"type":"cc.SpriteFrame","value":{"uuid":"<png的spriteFrame子资产uuid,如 xxx@f9941>"}}`。
+  png 的子资产 uuid 读其 .meta 的 subMetas(importer=sprite-frame)。**必须用 db://assets 内资产**。
 
 **批量摆放**:scene_summary 读画布尺寸 → 算等距坐标或用 anchor/relative → 循环 act_create_node → scene_summary 重跑,验证 zone/pct 与预期一致。
 
@@ -75,6 +78,7 @@ description: 使用 cocos-agent-kit MCP 工具操作 Cocos Creator 编辑器时�
 - 场景视图对场景进程直改**即时可见**,层级面板可能滞后(数据以工具回读为准);
 - 端口 7420 单实例:用户开了多个编辑器项目会抢端口,提示先关旧的;
 - `save_scene` 保存的是**当前打开的场景**——动手前确认用户打开的是目标场景;
-- Sprite 的 spriteFrame 资产引用暂无法通过 act 设置——需要显示具体图片时,引导用户手动设置或等版本更新;
+- Sprite 的 spriteFrame 引用:act_set_property 官方通道已支持(见配方);**必须引用 db://assets 内资产**——
+  internal 内置图(如 default_sprite_splash)编辑器可见但预览加载失败(实测);设置后查 console_logs 无 "asset can't be load" 才算生效;
 - 自定义脚本挂载依赖脚本已编译:`refresh_assets` 后再挂;挂载用脚本 uuid(工具自动映射 @ccclass 类名);
 - 编辑器辅助层(Editor Scene Foreground/Background)是编辑器自带节点——统计业务组件时过滤它们(`scene_summary` 已自动过滤;`scene_tree` 传 `filterEditor: true`)。
