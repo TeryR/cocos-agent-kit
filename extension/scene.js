@@ -493,23 +493,64 @@ module.exports = {
       };
     },
 
-    // 操作原语:通用组件属性写入(基本类型/color 数组/字符串;资产引用走主进程 set-property 通道)
+    // 操作原语:通用组件属性写入。资产引用值({__uuid__})自动解析为场景进程中已加载的资产对象
     act_set_property(args) {
       const scene = cc.director.getScene();
       const node = scene && findByUuid(scene, args && args.uuid);
       if (!node) return { error: 'node not found: ' + (args && args.uuid) };
       const comp = findComponent(node, args.component);
       if (!comp) return { error: 'component not found: ' + args.component, available: componentNames(node) };
-      // 校验:属性必须已存在于组件上,拒绝在组件对象上凭空创建字段
+
+      let value = args.value;
+      // 资产引用智能解析:{__uuid__} → 场景进程中已加载的资产实例
+      if (value && typeof value === 'object' && value.__uuid__) {
+        const mainUuid = value.__uuid__.split('@')[0];
+        const subId = (value.__uuid__.split('@')[1] || '').trim();
+        let asset = null;
+        const store = cc.assetManager.assets;
+        const entries = [];
+        if (typeof store.forEach === 'function') {
+          store.forEach((v, k) => entries.push([String(k), v]));
+        } else {
+          for (const k of Object.keys(store || {})) entries.push([k, store[k]]);
+        }
+        for (const [k, v] of entries) {
+          const ku = k.split('@');
+          if (ku[0] === mainUuid && (!subId || ku[1] === subId || !ku[1])) { asset = v; break; }
+        }
+        if (!asset) {
+          return {
+            error: 'asset not loaded in scene process: ' + value.__uuid__,
+            scanned: entries.length,
+            hint: '内置资产通常可用;项目资产需已被场景引用加载',
+          };
+        }
+        value = asset;
+      }
+
+      // 校验:属性必须已存在于组件上,拒绝凭空创建字段
       if (comp[args.prop] === undefined && !(args.prop in comp)) {
         return { error: 'property not found on component: ' + args.prop };
       }
       try {
-        applyProps(comp, { [args.prop]: args.value });
+        applyProps(comp, { [args.prop]: value });
       } catch (e) {
         return { error: 'set failed: ' + String((e && e.message) || e) };
       }
       return { prop: args.prop, newValue: serializeVal(comp[args.prop], 2) };
+    },
+
+    // 信息原语(调试):列出场景进程中已加载的资产(用于定位内置单色图等)
+    debug_assets(args) {
+      const out = [];
+      const filter = args && args.filter;
+      for (const [uuid, asset] of cc.assetManager.assets) {
+        const cname = asset.constructor && asset.constructor.name;
+        if (filter && !uuid.includes(filter) && !String(asset.name || '').includes(filter) && cname !== filter) continue;
+        out.push({ uuid, type: cname, name: asset.name || '' });
+        if (out.length >= 60) { out.push({ truncated: true }); break; }
+      }
+      return { count: out.length, assets: out };
     },
   },
 };

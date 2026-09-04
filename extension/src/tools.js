@@ -110,6 +110,25 @@ const EXTRA_TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'debug_assets',
+    description:
+      'DEBUG: list assets loaded in the scene process (uuid/type/name). Use to locate builtin assets like the white single-color sprite before assigning it to a Sprite.',
+    inputSchema: {
+      type: 'object',
+      properties: { filter: { type: 'string', description: 'substring filter on uuid/type/name' } },
+    },
+  },
+  {
+    name: 'query_nodes_by_asset',
+    description:
+      'Find all nodes in the open scene that reference a given asset uuid (official editor query). Scene-level impact analysis for asset replacement/deletion.',
+    inputSchema: {
+      type: 'object',
+      properties: { uuid: { type: 'string', description: 'asset uuid' } },
+      required: ['uuid'],
+    },
+  },
+  {
     name: 'image_meta',
     description: 'Pixel size of an image asset (reads PNG/JPEG header from disk). Layout needs to know how big pictures are.',
     inputSchema: {
@@ -173,16 +192,22 @@ const EXTRA_TOOLS = [
   {
     name: 'act_set_property',
     description:
-      'Write ONE property on a component (primitive write). Basic types/colors/strings go through the scene process; asset references (e.g. spriteFrame {__uuid__}) go through editor set-property channel. Returns the actual new value.',
+      'Write one component property via the OFFICIAL editor channel. path = "__comps__.<componentIndex>.<propName>" (componentIndex = position in the node component list, as shown by scene_tree). dump = {type, value}; for asset references use dump {type:"cc.SpriteFrame", value:{uuid:"<asset uuid>"}}.',
     inputSchema: {
       type: 'object',
       properties: {
-        uuid: { type: 'string' },
-        component: { type: 'string' },
-        prop: { type: 'string', description: 'property name, e.g. string / fontSize / color / _spriteFrame' },
-        value: { description: 'new value; color as [r,g,b]; asset ref as {"__uuid__": "..."}' },
+        uuid: { type: 'string', description: 'node uuid' },
+        path: { type: 'string', description: 'e.g. __comps__.1._spriteFrame' },
+        dump: {
+          type: 'object',
+          description: 'e.g. {"type":"cc.SpriteFrame","value":{"uuid":"<asset uuid>"}} for asset refs, or {"type":"cc.String","value":"text"}',
+          properties: {
+            type: { type: 'string' },
+            value: {},
+          },
+        },
       },
-      required: ['uuid', 'component', 'prop', 'value'],
+      required: ['uuid', 'path', 'dump'],
     },
   },
 ];
@@ -201,28 +226,23 @@ const DISPATCH_EXTRA = {
   scene_list: async () => textResult(assetInspect.sceneList()),
   console_logs: async (args) => textResult(assetInspect.consoleLogs(args || {})),
   preview_info: async () => textResult(assetInspect.previewInfo()),
+  debug_assets: async (args) => textResult(await sceneScript('debug_assets', args || {})),
   act_set_property: async (args) => {
-    if (!args || !args.uuid || !args.component || args.prop === undefined) {
-      throw new Error('uuid, component, prop, value are required');
+    if (!args || !args.uuid || !args.path || !args.dump) {
+      throw new Error('uuid, path, dump are required');
     }
-    // 双通道:先编辑器官方 set-property 消息(支持资产引用),失败退场景进程直改(基础类型)
-    const outcome = await tryChain([
-      {
-        label: "scene/'set-property'",
-        fn: () => Editor.Message.request('scene', 'set-property', {
-          uuid: args.uuid,
-          property: args.prop,
-          value: args.value,
-        }),
-      },
-      { label: 'scene-process direct', fn: () => sceneScript('act_set_property', args) },
-    ]);
-    const readback = await sceneScript('component_props', {
+    // 官方通道(格式实锤自 asar 内置调用范例):{uuid, path, dump:{type, value}}
+    const result = await Editor.Message.request('scene', 'set-property', {
       uuid: args.uuid,
-      component: args.component,
-      props: [args.prop],
+      path: args.path,
+      dump: args.dump,
     });
-    return textResult({ via: outcome.via, readback });
+    return textResult({ set: true, path: args.path, result: result === undefined ? null : result });
+  },
+  query_nodes_by_asset: async (args) => {
+    if (!args || !args.uuid) throw new Error('uuid is required');
+    const nodes = await Editor.Message.request('scene', 'query-nodes-by-asset-uuid', args.uuid);
+    return textResult({ uuid: args.uuid, nodes: nodes || [] });
   },
   act_reparent: async (args) => {
     if (!args || !args.uuid || !args.parent) throw new Error('uuid and parent are required');
