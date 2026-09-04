@@ -116,6 +116,20 @@ def main():
     st, d = raw_call({'jsonrpc': '2.0', 'id': 1, 'method': 'no/such/method'})
     record('P03 未知 method', 'PROTO', 'OK' if st == 'RPC_ERROR' else 'BREAK', str(d)[:100])
 
+    # 注册一致性:tools/list 列出的每个工具,空参调用不得报 "unknown tool"
+    # (空参调用会触发参数校验错误,但那证明分发已注册)
+    payload = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}).encode()
+    req = urllib.request.Request(MCP, data=payload, headers={'Content-Type': 'application/json'})
+    tools = [t['name'] for t in json.load(urllib.request.urlopen(req, timeout=15))['result']['tools']]
+    unknown = []
+    for name in tools:
+        st2, d2 = call(name, {})
+        if 'unknown tool' in str(d2):
+            unknown.append(name)
+    record('P04 注册一致性(tools/list vs dispatch)', 'PROTO',
+           'OK' if not unknown else 'BREAK',
+           '全部 %d 个可分发' % len(tools) if not unknown else 'missing dispatch: %s' % unknown)
+
     print('== GROUP C: 并发 ==')
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as ex:
         futures = [ex.submit(call, 'scene_tree', {'maxDepth': 3}) for _ in range(5)]

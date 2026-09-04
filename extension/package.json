@@ -1,6 +1,6 @@
 {
   "name": "cocos-sense",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Read-only perception MCP server for AI agents. Sense only, no act - actuation stays with the GUI agent.",
   "author": "05-zcode项目",
   "main": "./main.js",

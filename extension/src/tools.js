@@ -35,7 +35,7 @@ async function tryChain(candidates) {
 }
 
 const EXTRA_TOOLS = [
-  // ============ 感知原语(v0.3)============
+  // ============ 感知原语(v0.3/v0.4)============
   {
     name: 'scene_summary',
     description:
@@ -102,6 +102,66 @@ const EXTRA_TOOLS = [
     description: 'Preview service URL and trigger hints. Run-feedback loop: preview, then console_logs for errors.',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'image_meta',
+    description: 'Pixel size of an image asset (reads PNG/JPEG header from disk). Layout needs to know how big pictures are.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: { type: 'string', description: 'db://assets/... png/jpg url' } },
+      required: ['url'],
+    },
+  },
+  {
+    name: 'asset_refs',
+    description:
+      'Reverse references: which scenes/prefabs/anims reference the target asset uuid. Use for impact analysis before deleting/replacing assets, and for reference-chain diagnosis.',
+    inputSchema: {
+      type: 'object',
+      properties: { uuid: { type: 'string', description: 'asset uuid (from asset meta or inspect_asset references)' } },
+      required: ['uuid'],
+    },
+  },
+  {
+    name: 'create_scene',
+    description:
+      'Create a new scene by copying an existing scene as template (format safety guaranteed). Cleanup unneeded nodes afterwards with act_delete_node. If the project has NO scene at all, you must create the first one manually in the editor (File → New Scene).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'new scene name (no path separators)' },
+        templateUrl: { type: 'string', description: 'optional: scene url to copy from; defaults to first scene in project' },
+      },
+      required: ['name'],
+    },
+  },
+  // ============ 操作原语(v0.4)============
+  {
+    name: 'act_reparent',
+    description:
+      'Move a node under a new parent. Defaults to keeping world transform. Returns new parent and siblings readback. Refuses cycles.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        uuid: { type: 'string' },
+        parent: { type: 'string', description: 'new parent uuid or "scene"' },
+        keepWorld: { type: 'boolean', description: 'keep world position (default true)' },
+      },
+      required: ['uuid', 'parent'],
+    },
+  },
+  {
+    name: 'act_set_sibling_index',
+    description:
+      'Change sibling index (2D render order / hierarchy position). Returns final sibling order readback.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        uuid: { type: 'string' },
+        index: { type: 'number' },
+      },
+      required: ['uuid', 'index'],
+    },
+  },
   // ============ 操作原语(v0.3)============
   {
     name: 'act_set_property',
@@ -123,6 +183,9 @@ const EXTRA_TOOLS = [
 const DISPATCH_EXTRA = {
   scene_summary: async (args) => textResult(await sceneScript('scene_summary', args || {})),
   scene_info: async () => textResult(await sceneScript('scene_info', {})),
+  image_meta: async (args) => textResult(assetInspect.imageMeta(args || {})),
+  asset_refs: async (args) => textResult(assetInspect.assetRefs(args || {})),
+  create_scene: async (args) => textResult(assetInspect.createScene(args || {})),
   component_props: async (args) => {
     if (!args || !args.uuid || !args.component) throw new Error('uuid and component are required');
     return textResult(await sceneScript('component_props', args));
@@ -153,6 +216,14 @@ const DISPATCH_EXTRA = {
       props: [args.prop],
     });
     return textResult({ via: outcome.via, readback });
+  },
+  act_reparent: async (args) => {
+    if (!args || !args.uuid || !args.parent) throw new Error('uuid and parent are required');
+    return textResult(await sceneScript('act_reparent', args));
+  },
+  act_set_sibling_index: async (args) => {
+    if (!args || !args.uuid || args.index === undefined) throw new Error('uuid and index are required');
+    return textResult(await sceneScript('act_set_sibling_index', args));
   },
 };
 

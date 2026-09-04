@@ -446,6 +446,41 @@ module.exports = {
       return { components: componentNames(node) };
     },
 
+    act_reparent(args) {
+      const scene = cc.director.getScene();
+      const node = scene && findByUuid(scene, args && args.uuid);
+      if (!node) return { error: 'node not found: ' + (args && args.uuid) };
+      const newParent = findParent(scene, args.parent);
+      if (!newParent) return { error: 'parent not found: ' + args.parent };
+      // 防循环:新父级不能是自己或自己的后代
+      let p = newParent;
+      while (p) {
+        if (p === node) return { error: 'cannot reparent a node into its own subtree' };
+        p = p.parent;
+      }
+      const keepWorld = args.keepWorld !== false;
+      node.setParent(newParent, keepWorld);
+      return {
+        moved: node.name,
+        newParent: { name: newParent.name, uuid: newParent.uuid },
+        worldPosition: vecToJson(node.worldPosition),
+        siblings: (newParent.children || []).map((c) => c.name),
+      };
+    },
+
+    act_set_sibling_index(args) {
+      const scene = cc.director.getScene();
+      const node = scene && findByUuid(scene, args && args.uuid);
+      if (!node) return { error: 'node not found: ' + (args && args.uuid) };
+      const idx = Number(args.index) || 0;
+      node.setSiblingIndex(idx);
+      return {
+        node: node.name,
+        siblingIndex: node.getSiblingIndex(),
+        siblings: node.parent ? node.parent.children.map((c) => c.name) : [],
+      };
+    },
+
     // 操作原语:通用组件属性写入(基本类型/color 数组/字符串;资产引用走主进程 set-property 通道)
     act_set_property(args) {
       const scene = cc.director.getScene();

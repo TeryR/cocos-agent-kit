@@ -115,10 +115,120 @@ function ccclassOf(scriptUuid) {
   return null;
 }
 
+// 信息原语:图片元信息(像素尺寸)
+function imageMeta(args) {
+  const url = args && args.url;
+  const p = dbToPath(url);
+  if (!p || !fs.existsSync(p)) return { error: 'asset file not found: ' + url };
+  const buf = Buffer.alloc(Math.min(fs.statSync(p).size, 64 * 1024));
+  const fd = fs.openSync(p, 'r');
+  fs.readSync(fd, buf, 0, buf.length, 0);
+  fs.closeSync(fd);
+  // PNG: IHDR 宽高在固定偏移(big-endian)
+  if (buf.length > 24 && buf.toString('ascii', 12, 16) === 'IHDR') {
+    return {
+      url,
+      format: 'png',
+      width: buf.readUInt32BE(16),
+      height: buf.readUInt32BE(20),
+      bitDepth: buf[24],
+      colorType: buf[25],
+      bytes: fs.statSync(p).size,
+    };
+  }
+  // JPEG: 扫 SOF 段
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let off = 2;
+    while (off + 9 < buf.length) {
+      if (buf[off] !== 0xff) { off++; continue; }
+      const marker = buf[off + 1];
+      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+        return {
+          url,
+          format: 'jpeg',
+          height: buf.readUInt16BE(off + 5),
+          width: buf.readUInt16BE(off + 7),
+          bytes: fs.statSync(p).size,
+        };
+      }
+      off += 2 + buf.readUInt16BE(off + 2);
+    }
+    return { error: 'jpeg SOF not found in first 64KB' };
+  }
+  return { error: 'unsupported format (only png/jpeg)', head: buf.toString('hex', 0, 4) };
+}
+
+// 信息原语:反向引用——哪些 JSON 资产引用了目标 uuid
+function assetRefs(args) {
+  const target = (args && args.uuid) || '';
+  if (!target) return { error: 'uuid is required' };
+  const main = target.split('@')[0];
+  const files = [];
+  walkFiles(path.join(projectRoot(), 'assets'), ['.scene', '.prefab', '.anim'], files);
+  const hits = [];
+  for (const f of files) {
+    try {
+      const content = fs.readFileSync(f, 'utf-8');
+      let count = 0;
+      let idx = content.indexOf(target);
+      while (idx !== -1) { count++; idx = content.indexOf(target, idx + target.length); }
+      if (count > 0) {
+        hits.push({
+          url: 'db://assets/' + f.replace(/\\/g, '/').split('/assets/')[1],
+          times: count,
+        });
+      }
+    } catch (e) { /* 单文件失败跳过 */ }
+  }
+  return { uuid: target, referencedBy: hits.length ? hits : [], note: hits.length ? null : '无引用(未被任何场景/prefab/动画使用,或引用同样断裂)' };
+}
+
+// 操作原语:从现有场景复制创建新场景(格式合法性由模板保证)
+function createScene(args) {
+  const name = args && args.name;
+  if (!name || /[\\/:*?"<>|]/.test(name)) return { error: 'invalid scene name: ' + (name || '(empty)') };
+  const scenesDir = path.join(projectRoot(), 'assets');
+  const files = [];
+  walkFiles(scenesDir, ['.scene'], files);
+  if (!files.length) {
+    return {
+      error: '项目中没有任何场景可作模板',
+      hint: '首个场景请你在编辑器里 File → New Scene 手动创建并保存(启动权归你);之后即可用本工具复制派生',
+    };
+  }
+  let template = args && args.templateUrl ? dbToPath(args.templateUrl) : files[0];
+  if (!template || !fs.existsSync(template)) return { error: 'template scene not found: ' + template };
+  const target = path.join(scenesDir, name + '.scene');
+  if (fs.existsSync(target)) return { error: 'scene already exists: ' + target };
+  const crypto = require('crypto');
+  const newUuid = crypto.randomUUID();
+  const sceneJson = readJSON(template);
+  for (const item of sceneJson) {
+    if (!item || typeof item !== 'object') continue;
+    if (item.__type__ === 'cc.SceneAsset') item._name = name;
+    if (item.__type__ === 'cc.Scene') {
+      item._name = name;
+      item._id = newUuid;
+    }
+  }
+  fs.writeFileSync(target, JSON.stringify(sceneJson, null, 2), 'utf-8');
+  const metaTemplate = readJSON(template + '.meta');
+  metaTemplate.uuid = newUuid;
+  fs.writeFileSync(target + '.meta', JSON.stringify(metaTemplate, null, 2), 'utf-8');
+  return {
+    created: 'db://assets/' + name + '.scene',
+    copiedFrom: 'db://assets/' + template.replace(/\\/g, '/').split('/assets/')[1],
+    note: '内容为模板的完整拷贝;用 act 工具清理不需要的节点,双击打开后即可感知',
+  };
+}
+
 module.exports = {
   dbToPath,
   projectRoot,
   ccclassOf,
+  imageMeta,
+  assetRefs,
+  createScene,
 
   // 信息原语:读 JSON 资产(prefab/scene/anim)结构 + 引用清单
   inspectAsset(args) {
