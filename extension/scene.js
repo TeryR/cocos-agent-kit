@@ -227,14 +227,16 @@ module.exports = {
 
     // ============ 感知原语 ============
 
-    // 确定性事实汇编:每节点一行(九宫格/百分比/尺寸/组件/激活态)+ 空容器/越界统计。
-    // 只做数学换算;功能语义由 Agent 从组件与命名自行推断。
+    // 确定性事实汇编:每节点一行。空间表达按维度分流——
+    //   UI 节点(有 UITransform):画布九宫格+百分比(2D 语言)
+    //   3D 世界节点(无 UITransform):世界坐标(3D 语言)
+    // 全部为确定性换算;功能语义由 Agent 从组件与命名自行推断。
     scene_summary(args) {
       const scene = cc.director.getScene();
       if (!scene) return { error: 'no active scene' };
       const rect = canvasRectOf(scene);
       const maxDepth = Math.min(Number(args && args.maxDepth) || 8, 14);
-      const stats = { nodes: 0, emptyContainers: 0, outOfCanvas: 0, inactive: 0 };
+      const stats = { nodes: 0, emptyContainers: 0, outOfCanvas: 0, inactive: 0, uiNodes: 0, world3dNodes: 0 };
       const compStats = {};
       const lines = [];
 
@@ -242,12 +244,22 @@ module.exports = {
         stats.nodes++;
         const comps = componentNames(n);
         for (const c of comps) compStats[c] = (compStats[c] || 0) + 1;
-        const facts = rect ? layoutFacts(n, rect) : null;
-        if (facts && facts.outOfCanvas) stats.outOfCanvas++;
+        const isUI = !!spatialInfo(n).contentSize;
+        if (isUI) stats.uiNodes++; else stats.world3dNodes++;
         const kids = n.children || [];
         if (kids.length === 0) stats.emptyContainers++;
+
         let line = '  '.repeat(indent) + '- ' + (n.name || '');
-        if (facts) line += ' @' + facts.zone + ' (' + Math.round(facts.pct.x * 100) + '%,' + Math.round(facts.pct.y * 100) + '%)';
+        if (isUI && rect) {
+          const facts = layoutFacts(n, rect);
+          if (facts) {
+            if (facts.outOfCanvas) stats.outOfCanvas++;
+            line += ' @' + facts.zone + ' (' + Math.round(facts.pct.x * 100) + '%,' + Math.round(facts.pct.y * 100) + '%)';
+          }
+        } else {
+          const wp = vecToJson(n.worldPosition);
+          if (wp) line += ' @world(' + wp.x + ',' + wp.y + ',' + wp.z + ')';
+        }
         const sz = spatialInfo(n).contentSize;
         if (sz && (sz.w || sz.h)) line += ' ' + sz.w + 'x' + sz.h;
         if (comps.length) line += ' [' + comps.join(',') + ']';
@@ -264,11 +276,11 @@ module.exports = {
 
       return {
         scene: { name: scene.name, uuid: scene.uuid },
-        canvas: rect ? { width: rect.w, height: rect.h } : null,
+        uiCanvas: rect ? { width: rect.w, height: rect.h } : null,
         stats,
         componentStats: compStats,
         tree: lines,
-        note: 'zone/pct 为相对画布的确定性换算(九宫格+百分比);功能语义不在本接口职责内',
+        note: 'UI 节点用画布九宫格/百分比;3D 世界节点用世界坐标。全部为确定性换算;功能语义由你推断',
       };
     },
 
