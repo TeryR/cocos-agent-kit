@@ -1,13 +1,9 @@
 'use strict';
 
-// 感知工具集:一个工具 = 一个 MCP tool,全部只读(ADR-1)。
-// 依赖编辑器 API 的地方做防御性映射;首次真机加载后按 docs/design.md 校准清单逐项核对。
+// 工具注册:v0.1 感知 4 工具 + v0.2 act 操作工具(save/refresh 走主进程候选链)。
+// act 工具全部只操作场景进程内数据,返回值即操作后回读(ADR-5)。
 
-// 调用场景进程脚本(contributions.scene.script),路径:主进程 -> 场景进程。
-// 校准记录(实锤自编辑器内置 lightmap 扩展的官方调用):参数必须是单个对象,
-// 且 args 字段必须是【数组】——内部 method(...args) 会展开它,传对象会报
-// "Spread syntax requires ...iterable"。本扩展约定:业务参数打包成单元素数组,
-// scene.js 的每个 method 接收一个 args 对象。
+// 调用场景进程脚本:单对象参数,args 必须为【数组】(内部 method(...args) 展开)。
 function sceneScript(method, args) {
   return Editor.Message.request('scene', 'execute-scene-script', {
     name: 'cocos-sense',
@@ -22,11 +18,26 @@ function textResult(obj) {
   };
 }
 
+async function tryChain(candidates) {
+  const attempts = [];
+  for (const { label, fn } of candidates) {
+    try {
+      const result = await fn();
+      attempts.push({ via: label, ok: true, result: result === undefined ? null : result });
+      return { ok: true, via: label, attempts, result };
+    } catch (err) {
+      attempts.push({ via: label, ok: false, error: String((err && err.message) || err) });
+    }
+  }
+  return { ok: false, attempts, result: null };
+}
+
 const TOOLS = [
+  // ============ 感知 ============
   {
     name: 'scene_tree',
     description:
-      'Dump the Cocos Creator scene hierarchy: names, uuids, world positions, active states and component class names. Use this as ground truth instead of reading the Scene view visually.',
+      'Dump the Cocos Creator scene hierarchy: names, uuids, world positions, active states, component class names, plus spatial extras (contentSize/anchorPoint, TiledMap grid info). Ground truth instead of reading the Scene view visually.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -37,7 +48,7 @@ const TOOLS = [
   {
     name: 'node_detail',
     description:
-      'Detail of one node by uuid: parent, world position, angle, scale, components and direct children.',
+      'Detail of one node by uuid: parent chain via tree, world position, contentSize, anchorPoint, components and direct children.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -49,7 +60,7 @@ const TOOLS = [
   {
     name: 'selected_nodes',
     description:
-      'Read back which nodes are currently selected in the editor. Call this right after a GUI click or drag to verify what the action actually landed on. This is the verify step of the act-then-verify loop.',
+      'Read back which nodes are currently selected in the editor. Call right after a GUI click/drag to verify what the action actually landed on.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -63,10 +74,111 @@ const TOOLS = [
       },
     },
   },
+  // ============ 操作(v0.2)============
+  {
+    name: 'act_create_node',
+    description:
+      'Create a node under a parent (uuid or "scene"). Returns the created node readback (uuid/position/size/components) - use it to verify, not the word success. position is WORLD coordinates.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string' },
+        parent: { type: 'string', description: 'parent node uuid, or "scene" for scene root' },
+        position: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' },
+          },
+        },
+        color: { type: 'array', description: 'node tint [r,g,b] or [r,g,b,a]' },
+        components: {
+          type: 'array',
+          description: 'components to attach, e.g. [{"type":"cc.Label","props":{"string":"Coin","fontSize":28}}]',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string' },
+              props: { type: 'object' },
+            },
+          },
+        },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'act_delete_node',
+    description: 'Delete a node by uuid. Returns remaining sibling list as readback.',
+    inputSchema: {
+      type: 'object',
+      properties: { uuid: { type: 'string' } },
+      required: ['uuid'],
+    },
+  },
+  {
+    name: 'act_set_transform',
+    description:
+      'Modify node properties: position (world), name, active, angle, scale, size, color. Returns the node readback with actual new values.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        uuid: { type: 'string' },
+        props: {
+          type: 'object',
+          properties: {
+            position: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
+            name: { type: 'string' },
+            active: { type: 'boolean' },
+            angle: { type: 'number' },
+            scale: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
+            size: { type: 'object', properties: { w: { type: 'number' }, h: { type: 'number' } } },
+            color: { type: 'array' },
+          },
+        },
+      },
+      required: ['uuid', 'props'],
+    },
+  },
+  {
+    name: 'act_add_component',
+    description: 'Attach a component (e.g. "cc.Sprite") to a node, optionally applying props. Returns the component list readback.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        uuid: { type: 'string' },
+        type: { type: 'string', description: 'component class name, e.g. cc.Sprite' },
+        props: { type: 'object' },
+      },
+      required: ['uuid', 'type'],
+    },
+  },
+  {
+    name: 'act_remove_component',
+    description: 'Remove a component from a node. Returns the component list readback.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        uuid: { type: 'string' },
+        type: { type: 'string' },
+      },
+      required: ['uuid', 'type'],
+    },
+  },
+  {
+    name: 'save_scene',
+    description: 'Save the currently open scene. Tries known scene-save messages and reports which one worked.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'refresh_assets',
+    description: 'Refresh the asset database so file-level changes become visible assets.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 async function dispatch(name, args) {
   switch (name) {
+    // 感知
     case 'scene_tree':
       return textResult(await sceneScript('getSceneTree', args));
 
@@ -75,38 +187,63 @@ async function dispatch(name, args) {
       return textResult(await sceneScript('getNodeDetail', args));
 
     case 'selected_nodes': {
-      // 校准记录:Editor.Selection.getCurrentSelection 在 3.8.8 不存在(见校准清单)。
-      // 按候选链探测,第一个成功的生效,并把实际使用的 API 名返回给调用方。
+      // 校准记录:3.8.8 实测 Editor.Selection.getSelected('scene') 生效(候选链)
       const candidates = [
-        { api: 'Editor.Selection.curSelection', fn: () => Editor.Selection.curSelection('scene') },
-        { api: 'Editor.Selection.getSelected', fn: () => Editor.Selection.getSelected('scene') },
-        { api: "Message 'selection'/'query'", fn: () => Editor.Message.request('selection', 'query', 'scene') },
-        { api: "Message 'scene'/'query-selection'", fn: () => Editor.Message.request('scene', 'query-selection') },
+        { label: 'Editor.Selection.getSelected', fn: () => Editor.Selection.getSelected('scene') },
+        { label: 'Editor.Selection.curSelection', fn: () => Editor.Selection.curSelection('scene') },
+        { label: "Message 'selection'/'query'", fn: () => Editor.Message.request('selection', 'query', 'scene') },
+        { label: "Message 'scene'/'query-selection'", fn: () => Editor.Message.request('scene', 'query-selection') },
       ];
-      for (const { api, fn } of candidates) {
-        try {
-          const sel = fn();
-          if (sel !== undefined) {
-            const uuids = Array.isArray(sel) ? sel : (sel ? [sel] : []);
-            return textResult({ context: 'scene', uuids, via: api });
-          }
-        } catch (err) { /* 试下一个候选 */ }
-      }
-      return textResult({
-        context: 'scene',
-        uuids: [],
-        warning: 'all selection API candidates failed, see docs/design.md calibration list',
-      });
+      const outcome = await tryChain(candidates);
+      const uuids = Array.isArray(outcome.result) ? outcome.result : outcome.result ? [outcome.result] : [];
+      return textResult({ context: 'scene', uuids, via: outcome.via });
     }
 
     case 'asset_index': {
-      // 待校准:query-assets 返回字段做防御性映射
       const assets = await Editor.Message.request('asset-db', 'query-assets');
       const wanted = args && args.type;
       const rows = (Array.isArray(assets) ? assets : [])
         .map((a) => ({ name: a.name, type: a.type, url: a.url }))
         .filter((r) => r.name && (!wanted || r.type === wanted));
       return textResult({ count: rows.length, assets: rows });
+    }
+
+    // 操作
+    case 'act_create_node':
+      if (!args || !args.name) throw new Error('name is required');
+      return textResult(await sceneScript('act_create_node', args));
+
+    case 'act_delete_node':
+      if (!args || !args.uuid) throw new Error('uuid is required');
+      return textResult(await sceneScript('act_delete_node', args));
+
+    case 'act_set_transform':
+      if (!args || !args.uuid || !args.props) throw new Error('uuid and props are required');
+      return textResult(await sceneScript('act_set_transform', args));
+
+    case 'act_add_component':
+      if (!args || !args.uuid || !args.type) throw new Error('uuid and type are required');
+      return textResult(await sceneScript('act_add_component', args));
+
+    case 'act_remove_component':
+      if (!args || !args.uuid || !args.type) throw new Error('uuid and type are required');
+      return textResult(await sceneScript('act_remove_component', args));
+
+    case 'save_scene': {
+      const outcome = await tryChain([
+        { label: "scene/'save-scene'", fn: () => Editor.Message.request('scene', 'save-scene') },
+        { label: "scene/'save-current-scene'", fn: () => Editor.Message.request('scene', 'save-current-scene') },
+        { label: "scene/'save'", fn: () => Editor.Message.request('scene', 'save') },
+      ]);
+      return textResult({ saved: outcome.ok, via: outcome.via, attempts: outcome.attempts });
+    }
+
+    case 'refresh_assets': {
+      const outcome = await tryChain([
+        { label: "asset-db/'refresh-asset' db://assets/", fn: () => Editor.Message.request('asset-db', 'refresh-asset', 'db://assets/') },
+        { label: "asset-db/'refresh' db://assets/", fn: () => Editor.Message.request('asset-db', 'refresh', 'db://assets/') },
+      ]);
+      return textResult({ refreshed: outcome.ok, via: outcome.via, attempts: outcome.attempts });
     }
 
     default:
