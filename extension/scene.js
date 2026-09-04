@@ -216,11 +216,27 @@ function resolvePlacement(scene, args) {
   return null;
 }
 
+// 顶层异常包裹:单方法异常只影响该次调用,绝不炸场景进程(防御性)
+function safeWrap(methods) {
+  const wrapped = {};
+  for (const name of Object.keys(methods)) {
+    const fn = methods[name];
+    wrapped[name] = function (...callArgs) {
+      try {
+        return fn.apply(this, callArgs);
+      } catch (e) {
+        return { error: name + ' failed: ' + String((e && e.message) || e) };
+      }
+    };
+  }
+  return wrapped;
+}
+
 module.exports = {
   load() {},
   unload() {},
 
-  methods: {
+  methods: safeWrap({
     ping() {
       return { pong: true, hasScene: !!cc.director.getScene() };
     },
@@ -544,7 +560,14 @@ module.exports = {
     debug_assets(args) {
       const out = [];
       const filter = args && args.filter;
-      for (const [uuid, asset] of cc.assetManager.assets) {
+      const store = cc.assetManager.assets;
+      const entries = [];
+      if (typeof store.forEach === 'function') {
+        store.forEach((v, k) => entries.push([String(k), v]));
+      } else {
+        for (const k of Object.keys(store || {})) entries.push([k, store[k]]);
+      }
+      for (const [uuid, asset] of entries) {
         const cname = asset.constructor && asset.constructor.name;
         if (filter && !uuid.includes(filter) && !String(asset.name || '').includes(filter) && cname !== filter) continue;
         out.push({ uuid, type: cname, name: asset.name || '' });
@@ -552,5 +575,5 @@ module.exports = {
       }
       return { count: out.length, assets: out };
     },
-  },
+  }),
 };

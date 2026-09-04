@@ -28,16 +28,43 @@
 - **v0.3.1** 确定性空间事实层:scene_summary(九宫格+百分比+空容器/越界/未激活)+ act 语义定位(anchor 九宫格/relative 百分比)
 - **v0.3.2** 安全加固 + 边界测试套件(路径穿越/属性污染修复;27 用例)
 
-### v0.4(当前):打穿"从零到有画面的可玩游戏"
-- 操作:create_scene(模板复制)/ act_reparent / act_set_sibling_index / instantiate_prefab / save_as_prefab / build_web
-- 信息:image_meta(PNG 尺寸)/ asset_refs(反向引用)
+### v0.4(已完成):打穿"从零到有画面的可玩游戏"
+- 操作:create_scene(模板复制)/ act_reparent(循环防呆)/ act_set_sibling_index
+- 信息:image_meta(PNG/JPEG 尺寸)/ asset_refs(反向引用)
 - 文档:README 对外化 / SKILL.md 更新(新工具+创建前查现状铁律)
+- 测试:P04 注册一致性用例(抓到过漏注册分发);边界套件 27+ 用例回归
 
-### v0.5+(候选,按真实痛点排序)
-- spriteFrame 资产引用设置的真机校准深化
+### v0.5(已完成):资产引用打通——L1 零资产开发链路闭环
+- act_set_property 重写为官方 set-property 签名 {uuid, path: `__comps__.<组件索引>.<属性>`, dump: {type, value}}(签名实锤自 asar 内置调用范例)
+- 内置单色图(default_sprite_splash,7d8f9b89@f9941)成功赋给 Sprite;query_nodes_by_asset 反查引用闭环
+- 意义:Agent 创建的实体从"隐形空节点"变为"可见色块",零外部资产可开发 Snake/Breakout/2048/太空射击等玩法原型
+
+### v0.5.x(当前):Blender 战役(设计已定,代码未动)
+
+**定位**:第二条产线。Blender(DCC 资产生产)与 Cocos(引擎组装)是上下游,经 MCP 多 server 由同一 Agent 大脑统辖;粘合剂是**桥接知识包**(Cocos 面数预算/命名规范/glTF 摄取参数)。
+
+**第一步(实施入口)**:安装 Blender + 部署实测 BlenderMCP(ahujasid),跑真实任务记录强项与翻车点——产出增强版需求清单,再决定 fork 增强或自建。
+
+**核心设计:三段几何认知管线**(解决"Agent 从 mesh 数据认不出形状"的问题):
+1. **确定性几何特征提取**(信息原语,纯数学):
+   - 基础组:analyze_topology(连通分量/游离元素/非流形)、analyze_components(分量分割+PCA 主轴+体积占比)、analyze_shape(截面序列/旋转对称/曲率)
+   - 复杂模型分割升级包:RANSAC 平面检测(建筑=曼哈顿世界)、骨架化 skeletonization(动物=拓扑分支即语义部件)、V-HACD 凸分解
+2. **LLM 语义推理**(Agent 的强项):部件图 → 语义假设("四分支骨架图→四足动物";"围合垂直平面→墙体")——LLM 的建筑学/解剖学先验是识别知识库;不确定项主动向用户提问
+3. **渲染视觉交叉验证**:出图喂多模态确认外观(结构靠几何、外观靠视觉,双通道互证)
+
+**四路证据融合**:几何分割 + 部件特征 + LLM 先验 + 渲染视觉;外加捷径——AI 生成资产的 prompt 本身就是语义标注,工作流第一步先要 prompt。
+
+**价值定位**(AI 生成时代的重估):生成模型解决"从无到有",Agent 解决"从有到可用"——AI 产出的原始网格(漂亮但不合规:面数超标/无语义部件/原点随意)经体检报告(信息原语)→ 规格化加工(操作原语:减面/归位/命名/导出 glTF)→ 进 Cocos。**精修工程化是确定性批量活,恰好是原语模式的主场。**
+
+**可靠性分层(诚实边界)**:L-A 数值事实认知 ≈100%;L-B 规格比对推理高;L-C 语义认知不可靠(生成物命名无语义)→ 视觉补;L-D 有损视觉操作不可保证(减面破相无法从数字预知)→ 可控迭代(渐进参数+渲染出图+人终审)。验收设计按此分层:L-A/B 全自动,L-C 人给一次标注,L-D 人终审。
+
+**API 大坑备忘**:blender --background --python 支持无头运行(无启动权问题);bpy 覆盖率≈100%(操作原语工作量小);.blend 二进制(文件级信息原语需 bpy 或 glTF 导出绕行)。
+
+### v0.6+(候选,按真实痛点排序)
+- spriteFrame 资产引用设置的深化(非内置贴图的引用设置)
 - UI 刷新通知(场景进程直改后通知主进程 UI)
 - 批量属性 diff(diff_nodes)
-- 3D 适配(eulerAngles / 3D 组件白名单 / 几何体 preset / 相机感知)+ 3D 游戏案例实测
+- 3D 适配深化(eulerAngles / 3D 组件白名单 / 几何体 preset / 相机感知)
 - 视觉层(Set-of-Mark / 贴图多模态)
 - 破坏性操作组 D 测试(删 Canvas/场景根,需恢复方案确认)
 
