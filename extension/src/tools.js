@@ -3,12 +3,16 @@
 // 感知工具集:一个工具 = 一个 MCP tool,全部只读(ADR-1)。
 // 依赖编辑器 API 的地方做防御性映射;首次真机加载后按 docs/design.md 校准清单逐项核对。
 
-// 调用场景进程脚本(contributions.scene.script),路径:主进程 -> 场景进程
+// 调用场景进程脚本(contributions.scene.script),路径:主进程 -> 场景进程。
+// 校准记录(实锤自编辑器内置 lightmap 扩展的官方调用):参数必须是单个对象,
+// 且 args 字段必须是【数组】——内部 method(...args) 会展开它,传对象会报
+// "Spread syntax requires ...iterable"。本扩展约定:业务参数打包成单元素数组,
+// scene.js 的每个 method 接收一个 args 对象。
 function sceneScript(method, args) {
   return Editor.Message.request('scene', 'execute-scene-script', {
     name: 'cocos-sense',
     method,
-    args: args || {},
+    args: [args || {}],
   });
 }
 
@@ -71,21 +75,28 @@ async function dispatch(name, args) {
       return textResult(await sceneScript('getNodeDetail', args));
 
     case 'selected_nodes': {
-      // 待校准:Editor.Selection API 的准确签名见 docs/design.md 校准清单
-      let uuids = [];
-      try {
-        const sel = Editor.Selection.getCurrentSelection('scene');
-        if (Array.isArray(sel)) uuids = sel;
-      } catch (err) {
-        return textResult({
-          context: 'scene',
-          uuids: [],
-          warning:
-            'selection API needs calibration (see docs/design.md): ' +
-            String((err && err.message) || err),
-        });
+      // 校准记录:Editor.Selection.getCurrentSelection 在 3.8.8 不存在(见校准清单)。
+      // 按候选链探测,第一个成功的生效,并把实际使用的 API 名返回给调用方。
+      const candidates = [
+        { api: 'Editor.Selection.curSelection', fn: () => Editor.Selection.curSelection('scene') },
+        { api: 'Editor.Selection.getSelected', fn: () => Editor.Selection.getSelected('scene') },
+        { api: "Message 'selection'/'query'", fn: () => Editor.Message.request('selection', 'query', 'scene') },
+        { api: "Message 'scene'/'query-selection'", fn: () => Editor.Message.request('scene', 'query-selection') },
+      ];
+      for (const { api, fn } of candidates) {
+        try {
+          const sel = fn();
+          if (sel !== undefined) {
+            const uuids = Array.isArray(sel) ? sel : (sel ? [sel] : []);
+            return textResult({ context: 'scene', uuids, via: api });
+          }
+        } catch (err) { /* 试下一个候选 */ }
       }
-      return textResult({ context: 'scene', uuids });
+      return textResult({
+        context: 'scene',
+        uuids: [],
+        warning: 'all selection API candidates failed, see docs/design.md calibration list',
+      });
     }
 
     case 'asset_index': {

@@ -87,18 +87,18 @@
 { "count": 12, "assets": [ { "name": "hero_idle", "type": "cc.ImageAsset", "url": "db://assets/roles/hero_idle.png" } ] }
 ```
 
-## 真机校准清单
+## 真机校准清单 —— ✅ 3.8.8 实测全绿(2026-09-04)
 
-> 首次在真实 Cocos Creator 3.8.x 加载后逐项核对。任何一项不符,改动点都集中在单文件内,不会扩散。
+> 实测环境:Cocos Creator 3.8.8 / Windows / senseTest 项目。校准过程中踩到的两个坑已写进代码注释。
 
-- [ ] 扩展 manifest 被识别:`package_version: 2` + `contributions.scene.script` 指向的 `scene.js` 正确进入场景进程
-- [ ] `execute-scene-script` 参数格式为 `{ name: 'cocos-sense', method, args }`
-- [ ] 场景进程内全局 `cc` 可用;`node.worldPosition / active / activeInHierarchy / components` 字段存在
-- [ ] `Editor.Selection.getCurrentSelection('scene')` 存在且返回 UUID 数组(⚠️ 本项最可能需要调整 API 名,备选:监听 `scene` 的选中广播消息)
-- [ ] `Editor.Message.request('asset-db', 'query-assets')` 返回字段含 `name/type/url`
-- [ ] MCP 客户端(Claude Code)对 `application/json` 直响应模式兼容(规范允许;若个别客户端强要 SSE,再升级 mcp-server.js,接口不变)
+- [x] 扩展 manifest 被识别:`package_version: 2` + `contributions.scene.script` 正常进入场景进程(实测可用)
+- [x] **`execute-scene-script` 参数格式(踩坑一+二)**:必须传**单个对象** `{name, method, args}`,且 **`args` 必须是数组**(内部 `method(...args)` 展开,传对象报 "Spread syntax requires ...iterable")。实锤方式:asar 内置 lightmap 扩展的官方调用范例。业务参数打包为单元素数组 `[argsObj]`,场景进程方法签名统一 `method(argsObj)`
+- [x] 场景进程内全局 `cc` 可用:`node.worldPosition / active / activeInHierarchy / components`(构造函数类名)全部可用;且能读到**编辑器内部节点**(Editor Camera、gizmo 树、网格、Reference-Image-Canvas)——视觉不可见的结构现在全是真值
+- [x] **选中回读(踩坑三)**:`Editor.Selection.getCurrentSelection` 不存在;实测生效的是 **`Editor.Selection.getSelected('scene')`**(候选链第一个命中,返回 uuid 数组)
+- [x] `asset-db` `query-assets` 返回字段:`name / type / url` 直接可用(实测 501 项,含 internal 内置资产)
+- [x] MCP JSON 直响应模式兼容:JSON-RPC over HTTP + application/json 直响应工作正常(tools/list、tools/call 全程 curl 验证)
 
-校准方法(逐项 curl):
+校准方法(全部通过):
 
 ```bash
 # 1. 存活
@@ -115,7 +115,16 @@ curl -s -X POST http://127.0.0.1:7420/mcp -H "Content-Type: application/json" \
 # 5. 资产索引
 curl -s -X POST http://127.0.0.1:7420/mcp -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"asset_index","arguments":{}}}'
+# 6. 节点详情
+curl -s -X POST http://127.0.0.1:7420/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"node_detail","arguments":{"uuid":"<从scene_tree获取>"}}}'
 ```
+
+## 排障记录(校准过程)
+
+- `Spread syntax requires ...iterable` → `execute-scene-script` 的 args 传了对象,改为数组;
+- `Scenario scripts do not exist: undefined` → 参数用了位置形式,内部按对象解构得 undefined,改回单对象格式;
+- 排障方法论:编辑器日志 `temp/logs/project.log` 会打出场景进程异常与调用栈;内置扩展源码可用 `grep -abo '关键字' app.asar` 定位偏移后按 asar 头解析提取(`.ccc` 编译产物不可读,但调用范例/文档字符串可读)。
 
 ## 后续版本的设计草图
 
