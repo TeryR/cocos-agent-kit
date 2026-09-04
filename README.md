@@ -1,53 +1,63 @@
-# cocos-agent-kit — AI Agent 的 Cocos Creator 感知与操作层
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-> 让你的 AI Agent(Claude Code / Cursor / Cline / ZCode…)**看见并操作** Cocos Creator 编辑器:
-> 读取场景结构、节点坐标、组件属性、资产引用;创建节点、挂组件、改属性、保存场景、刷新资产——
-> 全部通过标准 MCP 协议,5 分钟接入,无需读懂源码。
+# cocos-agent-kit — Perception & Action Layer for AI Agents on Cocos Creator
 
-- **信息原语**:场景树(含九宫格/百分比空间事实)、节点详情、组件属性值、选中状态、资产索引、文件级资产解剖(含断链检测)、场景清单、编辑器日志、预览地址
-- **操作原语**:创建/删除节点、改属性/变换(支持语义定位)、挂/摘组件(含自定义脚本)、通用属性写入、保存场景、刷新资产、创建场景、重父级/排序、prefab 实例化与落盘、Web 构建
-- **设计原则**:只提供事实查询与意图执行;诊断、判断、修复方案由 Agent 基于返回数据自行完成
+> Let your AI Agent (Claude Code / Cursor / Cline / ZCode…) **see and operate** the Cocos Creator editor:
+> read scene hierarchy, node positions, component properties and asset references; create nodes, attach
+> components, modify properties, save scenes, refresh assets — all over standard MCP, 5-minute setup,
+> no need to read the source.
 
-## 快速开始(5 分钟)
+- **Information primitives**: scene digest (nine-grid zones / percentages / sizes / states), scene tree,
+  node details, component property **values**, selection, asset index, file-level asset dissection
+  (with broken-reference detection), scene list, editor logs, preview URL
+- **Action primitives**: create/delete nodes, transform & properties (with **semantic placement**),
+  attach/detach components (incl. custom scripts), generic property write, save scene, refresh assets,
+  create scene, reparent/sort, prefab instantiate & save-to-disk, web build
+- **Design principle**: primitives provide fact queries and intent execution only — diagnosis, judgment
+  and repair strategies belong to the Agent, based on the data these primitives return.
 
-### 前置条件
+## Quick Start (5 minutes)
 
-- Cocos Creator **3.8.x**(3.8.6+ 实测过,3.7 未验证)
-- 任意支持 MCP(Streamable HTTP)的 Agent 客户端
-- 一个你自己的 Cocos 游戏项目
+### Prerequisites
 
-### 第 1 步:安装扩展
+- Cocos Creator **3.8.x** (verified on 3.8.6+; 3.7 untested)
+- Any MCP-capable (Streamable HTTP) Agent client
+- One of your own Cocos game projects
 
-把本仓库的 `extension/` 文件夹整体拷贝到你项目的 `extensions/cocos-agent-kit/`(没有 `extensions` 目录就新建):
+### Step 1: Install the extension
+
+Copy the `extension/` folder from this repo into your project as `extensions/cocos-agent-kit/`
+(create the `extensions` directory if missing):
 
 ```
-你的项目/
+your-project/
 └── extensions/
-    └── cocos-agent-kit/        ← extension/ 的内容
+    └── cocos-agent-kit/    ← contents of extension/
         ├── package.json
         ├── main.js
         └── ...
 ```
 
-### 第 2 步:启用
+### Step 2: Enable
 
-打开/刷新项目——项目内扩展**默认自动启用**。若没启用,扩展管理器 → 扩展 → cocos-agent-kit → 开关打开。
+Open/refresh the project — project-scoped extensions are **enabled automatically**. If not:
+Extension Manager → cocos-agent-kit → toggle on.
 
-### 第 3 步:验证服务
+### Step 3: Verify the service
 
 ```bash
 curl http://127.0.0.1:7420/health
-# {"ok":true,"server":{"name":"cocos-agent-kit","version":"0.4.0"}}
+# {"ok":true,"server":{"name":"cocos-agent-kit","version":"0.4.1"}}
 ```
 
-### 第 4 步:接入你的 Agent
+### Step 4: Connect your Agent
 
 **Claude Code:**
 ```bash
 claude mcp add --transport http cocos-agent-kit http://127.0.0.1:7420/mcp
 ```
 
-**Cursor / Cline 等**(mcp.json):
+**Cursor / Cline etc.** (mcp.json):
 ```json
 {
   "mcpServers": {
@@ -56,91 +66,100 @@ claude mcp add --transport http cocos-agent-kit http://127.0.0.1:7420/mcp
 }
 ```
 
-### 第 5 步:安装 Skill(强烈推荐)
+### Step 5: Install the Skill (strongly recommended)
 
-工具是能力,[`skills/cocos-agent-kit/SKILL.md`](skills/cocos-agent-kit/SKILL.md) 是使用这些能力的作业指导书:
-感知→操作→验证→保存的工作流纪律、坐标系与设计分辨率知识、语义定位配方、资源异常诊断指引。
+Tools are capability; [`skills/cocos-agent-kit/SKILL.md`](skills/cocos-agent-kit/SKILL.md) is the playbook
+for using them correctly: the perceive → act → verify → save discipline, coordinate system knowledge,
+semantic placement recipes, and resource-anomaly diagnosis workflows.
 
-- **Claude Code**:拷到 `~/.claude/skills/cocos-agent-kit/SKILL.md`(全局)或项目 `.claude/skills/cocos-agent-kit/SKILL.md`
-- **ZCode / 其他支持 Agent Skills 的客户端**:同理放入其 skills 目录
+- **Claude Code**: copy to `~/.claude/skills/cocos-agent-kit/SKILL.md` (global) or
+  `.claude/skills/cocos-agent-kit/SKILL.md` (project-level)
+- **ZCode / other Agent-Skills-compatible clients**: same, into their skills directory
 
-### 第 6 步:冒烟测试
+### Step 6: Smoke test
 
-对你的 Agent 说:**"列出当前 Cocos 场景的节点树"**。它调用 `scene_tree` 返回真实场景数据 = 全链路打通。
+Tell your Agent: **"List the node tree of the current Cocos scene."** If it calls `scene_tree` and returns
+real scene data, the full chain works.
 
-## 工具清单(v0.4,28 个)
+## Tool Reference (v0.4, 28 tools)
 
-### 感知(信息)
+### Information primitives
 
-| 工具 | 内容 |
+| Tool | Content |
 |---|---|
-| `scene_summary` | 确定性事实汇编:每节点一行(九宫格/百分比/尺寸/组件/激活态)+ 空容器/越界/未激活统计 |
-| `scene_tree` | 完整层级树(uuid/世界坐标/组件/尺寸/锚点/TiledMap 格子) |
-| `scene_info` / `scene_list` | 当前打开场景 / 项目全部场景 |
-| `node_detail` | 单节点详情 |
-| `component_props` | 组件属性**值**(Sprite 显示哪张图、Label 文本、物理参数…) |
-| `selected_nodes` | 编辑器当前选中(回读验证) |
-| `asset_index` / `image_meta` | 资产索引 / 图片像素尺寸 |
-| `inspect_asset` | 文件级资产解剖:prefab/scene 内部树 + 全部引用 + 断链检测 |
-| `asset_refs` | 反向引用:谁引用了某个资产 |
-| `console_logs` | 编辑器日志尾部(编译错误/运行时异常) |
-| `preview_info` | 预览服务地址 |
+| `scene_summary` | Deterministic one-line-per-node digest: nine-grid zone, canvas %, size, components, active state + stats (empty containers / out-of-canvas / inactive) |
+| `scene_tree` | Full hierarchy (uuid / world position / components / size / anchor / TiledMap grid) |
+| `scene_info` / `scene_list` | Currently open scene / all scenes in project |
+| `node_detail` | Single node details |
+| `component_props` | Component property **values** (which image a Sprite shows, Label text, physics params…) |
+| `selected_nodes` | Editor selection (readback verification) |
+| `asset_index` / `image_meta` | Asset index / image pixel dimensions |
+| `inspect_asset` | File-level asset dissection: prefab/scene internal tree + all references + broken-ref detection |
+| `asset_refs` | Reverse references: which files use a given asset |
+| `console_logs` | Editor log tail (compile errors / runtime exceptions) |
+| `preview_info` | Preview service URL |
 
-### 操作(意图执行)
+### Action primitives
 
-| 工具 | 内容 |
+| Tool | Content |
 |---|---|
-| `act_create_node` | 创建节点,支持语义定位(`anchor: "top-right"` + margin / relative 百分比) |
-| `act_set_transform` / `act_set_property` | 改变换/属性(后者支持资产引用,双通道) |
-| `act_add_component` / `act_remove_component` | 挂/摘组件(内置类名或自定义脚本 uuid→自动映射 @ccclass) |
-| `act_reparent` / `act_set_sibling_index` | 移动层级 / 调整渲染顺序 |
-| `act_delete_node` | 删除节点 |
-| `create_scene` / `instantiate_prefab` / `save_as_prefab` | 建场景(复制模板)/ 实例化 prefab / 节点落盘为 prefab |
-| `save_scene` / `refresh_assets` / `build_web` | 保存 / 刷新 / Web 构建 |
+| `act_create_node` | Create node with **semantic placement** (`anchor: "top-right"` + margin, or relative %) |
+| `act_set_transform` / `act_set_property` | Modify transform/property (latter supports asset references, dual channel) |
+| `act_add_component` / `act_remove_component` | Attach/detach components (builtin class name, or custom script uuid → auto @ccclass mapping) |
+| `act_reparent` / `act_set_sibling_index` | Move hierarchy / render order |
+| `act_delete_node` | Delete node |
+| `create_scene` / `instantiate_prefab` / `save_as_prefab` | Scene creation (template copy) / prefab instantiate / save node as prefab |
+| `save_scene` / `refresh_assets` / `build_web` | Save / refresh / web build |
 
-## 排查表
+## Troubleshooting
 
-| 症状 | 原因与解法 |
+| Symptom | Cause & fix |
 |---|---|
-| `/health` 不通 | 扩展未启用 → 扩展管理器检查;或开了多个编辑器实例抢 7420 → **关掉多余的编辑器**(单端口单实例) |
-| 编辑器控制台报 `EADDRINUSE` | 同上 |
-| 场景树返回 error: no active scene | 编辑器里还没打开任何场景 → 双击一个 .scene |
-| 工具报 spread / undefined 错误 | 旧版扩展,拉最新并重新加载 |
-| `component_props` 报 component not found | 自定义脚本未编译 → `refresh_assets` 后重试 |
+| `/health` unreachable | Extension not enabled → check Extension Manager; or multiple editor instances fighting over 7420 → **close extra editors** (single port, single instance) |
+| Editor console shows `EADDRINUSE` | Same as above |
+| scene_tree returns error: no active scene | No scene open in the editor → double-click a .scene |
+| Tool errors mention spread / undefined | Outdated extension build → pull latest and reload |
+| `component_props` says component not found | Custom script not compiled → `refresh_assets` and retry |
 
-## ⚠️ 安全须知
+## ⚠️ Safety
 
-- `act_` 系列工具会**真实修改你的场景**,`save_scene` 会落盘——操作前确保项目在 git 干净状态;
-- 感知工具全部只读;
-- 服务只监听 `127.0.0.1`,不对外网暴露;
-- 编辑器的启动权归你:让 Agent 操作前,自己打开项目编辑器(Agent 不会也不应替你启动)。
+- `act_` tools **actually modify your scene**, and `save_scene` persists to disk — make sure your
+  project is committed to git before letting an Agent write;
+- All perception tools are strictly read-only;
+- The server listens on `127.0.0.1` only, never exposed to the network;
+- **You own the editor**: open the project editor yourself before asking an Agent to operate —
+  it will not (and should not) launch the editor for you.
 
-## 文档
-
-| 文档 | 面向 | 内容 |
-|---|---|---|
-| [`docs/design.md`](docs/design.md) | 维护者/深入 | 架构决策记录、接口 schema、真机校准清单、排障记录 |
-| [`docs/knowledge-cocos-format.md`](docs/knowledge-cocos-format.md) | Agent/维护者 | Cocos 资产序列化格式知识(资源显示异常诊断必读) |
-| [`docs/editor-protocol.md`](docs/editor-protocol.md) | Agent/维护者 | 编辑器操作规程(启动权/前置检查/危险操作边界) |
-| [`docs/roadmap.md`](docs/roadmap.md) | 维护者 | 定位、生产化 gate、路线图、生态对比 |
-
-## 架构
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────┐
-│      你的 AI Agent(Claude / Cursor / ZCode)   │
-│        + cocos-agent-kit skill(作业指导书)          │
+│    Your AI Agent (Claude / Cursor / ZCode)   │
+│      + cocos-agent-kit skill (playbook)      │
 └────────────┬─────────────────────────────────┘
-             │ MCP(Streamable HTTP)
+             │ MCP (Streamable HTTP)
              ▼  http://127.0.0.1:7420/mcp
 ┌──────────────────────────────────────────────┐
-│  cocos-agent-kit 扩展(Cocos Creator 3.8.x)        │
-│  ├─ 信息原语:场景树/属性值/资产解剖/日志/引用    │
-│  └─ 操作原语:act_*(回读内建)/保存/刷新/构建     │
+│  cocos-agent-kit extension (Creator 3.8.x)   │
+│  ├─ info primitives: scene tree/values/      │
+│  │  asset dissection/logs/reverse refs       │
+│  └─ action primitives: act_* (readback       │
+│     built-in) / save / refresh / build       │
 └────────────┬─────────────────────────────────┘
              ▼
-      Cocos Creator 编辑器(场景进程 + asset-db)
+   Cocos Creator editor (scene process + asset-db)
 ```
+
+## Documentation
+
+> Documentation is currently written in Chinese.
+
+| Doc | Content |
+|---|---|
+| [`docs/design.md`](docs/design.md) | Architecture decision records, interface schemas, calibration checklist |
+| [`docs/knowledge-cocos-format.md`](docs/knowledge-cocos-format.md) | Cocos asset serialization knowledge (required reading for resource-anomaly diagnosis) |
+| [`docs/editor-protocol.md`](docs/editor-protocol.md) | Editor operation protocol (ownership, pre-flight checks, danger boundaries) |
+| [`docs/roadmap.md`](docs/roadmap.md) | Positioning, production gates, roadmap, ecosystem comparison |
 
 ## License
 
