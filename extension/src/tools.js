@@ -1,9 +1,11 @@
 'use strict';
 
-// 工具注册:v0.1 感知 4 工具 + v0.2 act 操作工具(save/refresh 走主进程候选链)。
-// act 工具全部只操作场景进程内数据,返回值即操作后回读(ADR-5)。
+// 工具注册(v0.3):感知原语 6 + 操作原语 8 + 状态工具 2 + 文件级信息原语 4。
+// 设计哲学:只提供"事实查询"与"意图执行"原语;诊断与修复方案由 Agent 基于返回数据自行推理。
 
-// 调用场景进程脚本:单对象参数,args 必须为【数组】(内部 method(...args) 展开)。
+const { TOOLS_BASE, dispatchBase } = require('./tools-base');
+const assetInspect = require('./asset-inspect');
+
 function sceneScript(method, args) {
   return Editor.Message.request('scene', 'execute-scene-script', {
     name: 'cocos-sense',
@@ -32,223 +34,121 @@ async function tryChain(candidates) {
   return { ok: false, attempts, result: null };
 }
 
-const TOOLS = [
-  // ============ 感知 ============
+const EXTRA_TOOLS = [
+  // ============ 感知原语(v0.3)============
   {
-    name: 'scene_tree',
+    name: 'scene_info',
     description:
-      'Dump the Cocos Creator scene hierarchy: names, uuids, world positions, active states, component class names, plus spatial extras (contentSize/anchorPoint, TiledMap grid info). Ground truth instead of reading the Scene view visually.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        maxDepth: { type: 'number', description: 'max tree depth, default 6, hard cap 12' },
-      },
-    },
-  },
-  {
-    name: 'node_detail',
-    description:
-      'Detail of one node by uuid: parent chain via tree, world position, contentSize, anchorPoint, components and direct children.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        uuid: { type: 'string', description: 'node uuid from scene_tree' },
-      },
-      required: ['uuid'],
-    },
-  },
-  {
-    name: 'selected_nodes',
-    description:
-      'Read back which nodes are currently selected in the editor. Call right after a GUI click/drag to verify what the action actually landed on.',
+      'Name/uuid of the currently open scene. Use it FIRST to confirm the editor has the target scene open (对照 asset_index/scene_list 的清单).',
     inputSchema: { type: 'object', properties: {} },
   },
   {
-    name: 'asset_index',
+    name: 'component_props',
     description:
-      'Index of project assets (name, type, url). Use it instead of visually scanning the Assets panel.',
+      'Read property VALUES of one component on a node (e.g. what image a Sprite shows, Label text, physics params). This is the "detail layer" that scene_tree intentionally omits.',
     inputSchema: {
       type: 'object',
       properties: {
-        type: { type: 'string', description: 'optional asset type filter, e.g. cc.ImageAsset' },
+        uuid: { type: 'string', description: 'node uuid' },
+        component: { type: 'string', description: 'component class name, e.g. cc.Sprite / PlayerController' },
+        props: { type: 'array', description: 'optional property name list; omit for sensible defaults' },
       },
+      required: ['uuid', 'component'],
     },
   },
-  // ============ 操作(v0.2)============
   {
-    name: 'act_create_node',
+    name: 'inspect_asset',
     description:
-      'Create a node under a parent (uuid or "scene"). Returns the created node readback (uuid/position/size/components) - use it to verify, not the word success. position is WORLD coordinates.',
+      'File-level inspection of a JSON asset (prefab/scene/anim): internal node tree, component summaries, ALL __uuid__ references with optional resolution to asset paths and broken-reference detection. Use for runtime-spawned entities (prefabs) and reference-chain diagnosis (color-block bugs).',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string' },
-        parent: { type: 'string', description: 'parent node uuid, or "scene" for scene root' },
-        position: {
-          type: 'object',
-          properties: {
-            x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' },
-          },
-        },
-        color: { type: 'array', description: 'node tint [r,g,b] or [r,g,b,a]' },
-        components: {
-          type: 'array',
-          description: 'components to attach, e.g. [{"type":"cc.Label","props":{"string":"Coin","fontSize":28}}]',
-          items: {
-            type: 'object',
-            properties: {
-              type: { type: 'string' },
-              props: { type: 'object' },
-            },
-          },
-        },
+        url: { type: 'string', description: 'e.g. db://assets/Res/Prefabs/apple.prefab' },
+        resolve: { type: 'boolean', description: 'resolve reference uuids to asset paths + flag broken ones (scans project metas)' },
       },
-      required: ['name'],
+      required: ['url'],
     },
   },
   {
-    name: 'act_delete_node',
-    description: 'Delete a node by uuid. Returns remaining sibling list as readback.',
+    name: 'scene_list',
+    description: 'All scenes in the project (internal name / uuid / url) + 当前打开场景对照用.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'console_logs',
+    description:
+      'Tail of the editor log (compile errors, runtime exceptions, [Scene] entries). The feedback loop after writing code: refresh_assets, then read this.',
     inputSchema: {
       type: 'object',
-      properties: { uuid: { type: 'string' } },
-      required: ['uuid'],
+      properties: {
+        lines: { type: 'number' },
+        level: { type: 'string', description: '"error" or "warn" filter' },
+      },
     },
   },
   {
-    name: 'act_set_transform',
+    name: 'preview_info',
+    description: 'Preview service URL and trigger hints. Run-feedback loop: preview, then console_logs for errors.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  // ============ 操作原语(v0.3)============
+  {
+    name: 'act_set_property',
     description:
-      'Modify node properties: position (world), name, active, angle, scale, size, color. Returns the node readback with actual new values.',
+      'Write ONE property on a component (primitive write). Basic types/colors/strings go through the scene process; asset references (e.g. spriteFrame {__uuid__}) go through editor set-property channel. Returns the actual new value.',
     inputSchema: {
       type: 'object',
       properties: {
         uuid: { type: 'string' },
-        props: {
-          type: 'object',
-          properties: {
-            position: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
-            name: { type: 'string' },
-            active: { type: 'boolean' },
-            angle: { type: 'number' },
-            scale: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
-            size: { type: 'object', properties: { w: { type: 'number' }, h: { type: 'number' } } },
-            color: { type: 'array' },
-          },
-        },
+        component: { type: 'string' },
+        prop: { type: 'string', description: 'property name, e.g. string / fontSize / color / _spriteFrame' },
+        value: { description: 'new value; color as [r,g,b]; asset ref as {"__uuid__": "..."}' },
       },
-      required: ['uuid', 'props'],
+      required: ['uuid', 'component', 'prop', 'value'],
     },
-  },
-  {
-    name: 'act_add_component',
-    description: 'Attach a component (e.g. "cc.Sprite") to a node, optionally applying props. Returns the component list readback.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        uuid: { type: 'string' },
-        type: { type: 'string', description: 'component class name, e.g. cc.Sprite' },
-        props: { type: 'object' },
-      },
-      required: ['uuid', 'type'],
-    },
-  },
-  {
-    name: 'act_remove_component',
-    description: 'Remove a component from a node. Returns the component list readback.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        uuid: { type: 'string' },
-        type: { type: 'string' },
-      },
-      required: ['uuid', 'type'],
-    },
-  },
-  {
-    name: 'save_scene',
-    description: 'Save the currently open scene. Tries known scene-save messages and reports which one worked.',
-    inputSchema: { type: 'object', properties: {} },
-  },
-  {
-    name: 'refresh_assets',
-    description: 'Refresh the asset database so file-level changes become visible assets.',
-    inputSchema: { type: 'object', properties: {} },
   },
 ];
 
+const DISPATCH_EXTRA = {
+  scene_info: async () => textResult(await sceneScript('scene_info', {})),
+  component_props: async (args) => {
+    if (!args || !args.uuid || !args.component) throw new Error('uuid and component are required');
+    return textResult(await sceneScript('component_props', args));
+  },
+  inspect_asset: async (args) => textResult(assetInspect.inspectAsset(args || {})),
+  scene_list: async () => textResult(assetInspect.sceneList()),
+  console_logs: async (args) => textResult(assetInspect.consoleLogs(args || {})),
+  preview_info: async () => textResult(assetInspect.previewInfo()),
+  act_set_property: async (args) => {
+    if (!args || !args.uuid || !args.component || args.prop === undefined) {
+      throw new Error('uuid, component, prop, value are required');
+    }
+    // 双通道:先编辑器官方 set-property 消息(支持资产引用),失败退场景进程直改(基础类型)
+    const outcome = await tryChain([
+      {
+        label: "scene/'set-property'",
+        fn: () => Editor.Message.request('scene', 'set-property', {
+          uuid: args.uuid,
+          property: args.prop,
+          value: args.value,
+        }),
+      },
+      { label: 'scene-process direct', fn: () => sceneScript('act_set_property', args) },
+    ]);
+    const readback = await sceneScript('component_props', {
+      uuid: args.uuid,
+      component: args.component,
+      props: [args.prop],
+    });
+    return textResult({ via: outcome.via, readback });
+  },
+};
+
+const TOOLS = TOOLS_BASE.concat(EXTRA_TOOLS);
+
 async function dispatch(name, args) {
-  switch (name) {
-    // 感知
-    case 'scene_tree':
-      return textResult(await sceneScript('getSceneTree', args));
-
-    case 'node_detail':
-      if (!args || !args.uuid) throw new Error('uuid is required');
-      return textResult(await sceneScript('getNodeDetail', args));
-
-    case 'selected_nodes': {
-      // 校准记录:3.8.8 实测 Editor.Selection.getSelected('scene') 生效(候选链)
-      const candidates = [
-        { label: 'Editor.Selection.getSelected', fn: () => Editor.Selection.getSelected('scene') },
-        { label: 'Editor.Selection.curSelection', fn: () => Editor.Selection.curSelection('scene') },
-        { label: "Message 'selection'/'query'", fn: () => Editor.Message.request('selection', 'query', 'scene') },
-        { label: "Message 'scene'/'query-selection'", fn: () => Editor.Message.request('scene', 'query-selection') },
-      ];
-      const outcome = await tryChain(candidates);
-      const uuids = Array.isArray(outcome.result) ? outcome.result : outcome.result ? [outcome.result] : [];
-      return textResult({ context: 'scene', uuids, via: outcome.via });
-    }
-
-    case 'asset_index': {
-      const assets = await Editor.Message.request('asset-db', 'query-assets');
-      const wanted = args && args.type;
-      const rows = (Array.isArray(assets) ? assets : [])
-        .map((a) => ({ name: a.name, type: a.type, url: a.url }))
-        .filter((r) => r.name && (!wanted || r.type === wanted));
-      return textResult({ count: rows.length, assets: rows });
-    }
-
-    // 操作
-    case 'act_create_node':
-      if (!args || !args.name) throw new Error('name is required');
-      return textResult(await sceneScript('act_create_node', args));
-
-    case 'act_delete_node':
-      if (!args || !args.uuid) throw new Error('uuid is required');
-      return textResult(await sceneScript('act_delete_node', args));
-
-    case 'act_set_transform':
-      if (!args || !args.uuid || !args.props) throw new Error('uuid and props are required');
-      return textResult(await sceneScript('act_set_transform', args));
-
-    case 'act_add_component':
-      if (!args || !args.uuid || !args.type) throw new Error('uuid and type are required');
-      return textResult(await sceneScript('act_add_component', args));
-
-    case 'act_remove_component':
-      if (!args || !args.uuid || !args.type) throw new Error('uuid and type are required');
-      return textResult(await sceneScript('act_remove_component', args));
-
-    case 'save_scene': {
-      const outcome = await tryChain([
-        { label: "scene/'save-scene'", fn: () => Editor.Message.request('scene', 'save-scene') },
-        { label: "scene/'save-current-scene'", fn: () => Editor.Message.request('scene', 'save-current-scene') },
-        { label: "scene/'save'", fn: () => Editor.Message.request('scene', 'save') },
-      ]);
-      return textResult({ saved: outcome.ok, via: outcome.via, attempts: outcome.attempts });
-    }
-
-    case 'refresh_assets': {
-      const outcome = await tryChain([
-        { label: "asset-db/'refresh-asset' db://assets/", fn: () => Editor.Message.request('asset-db', 'refresh-asset', 'db://assets/') },
-        { label: "asset-db/'refresh' db://assets/", fn: () => Editor.Message.request('asset-db', 'refresh', 'db://assets/') },
-      ]);
-      return textResult({ refreshed: outcome.ok, via: outcome.via, attempts: outcome.attempts });
-    }
-
-    default:
-      throw new Error('unknown tool: ' + name);
-  }
+  if (DISPATCH_EXTRA[name]) return DISPATCH_EXTRA[name](args);
+  return dispatchBase(name, args);
 }
 
 module.exports = { TOOLS, dispatch };
