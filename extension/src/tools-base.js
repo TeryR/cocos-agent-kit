@@ -84,6 +84,13 @@ const TOOLS_BASE = [
         name: { type: 'string' },
         parent: { type: 'string', description: 'parent node uuid, or "scene"' },
         position: { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } } },
+        anchor: { type: 'string', description: 'semantic placement: "top-left"/"top-center"/.../"center"/"bottom-right" relative to Canvas — no pixel math needed' },
+        margin: { type: 'object', description: 'inset from the anchored edges in px: {left,top,right,bottom}' },
+        relative: {
+          type: 'object',
+          description: 'offset from another node as fraction of canvas size: {to: uuid, dxPct: 0.1, dyPct: 0}',
+          properties: { to: { type: 'string' }, dxPct: { type: 'number' }, dyPct: { type: 'number' } },
+        },
         color: { type: 'array', description: '[r,g,b] or [r,g,b,a]' },
         components: {
           type: 'array',

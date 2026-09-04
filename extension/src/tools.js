@@ -37,6 +37,17 @@ async function tryChain(candidates) {
 const EXTRA_TOOLS = [
   // ============ 感知原语(v0.3)============
   {
+    name: 'scene_summary',
+    description:
+      'One-line-per-node deterministic scene digest: zone (nine-grid), canvas percentage, size, components, active state, plus stats (empty containers / out-of-canvas / inactive). Pure math conversion — NO semantic labels; infer functionality yourself from component and naming evidence.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        maxDepth: { type: 'number' },
+      },
+    },
+  },
+  {
     name: 'scene_info',
     description:
       'Name/uuid of the currently open scene. Use it FIRST to confirm the editor has the target scene open (对照 asset_index/scene_list 的清单).',
@@ -110,6 +121,7 @@ const EXTRA_TOOLS = [
 ];
 
 const DISPATCH_EXTRA = {
+  scene_summary: async (args) => textResult(await sceneScript('scene_summary', args || {})),
   scene_info: async () => textResult(await sceneScript('scene_info', {})),
   component_props: async (args) => {
     if (!args || !args.uuid || !args.component) throw new Error('uuid and component are required');

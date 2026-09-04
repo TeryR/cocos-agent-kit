@@ -135,6 +135,87 @@ const PROP_WHITELIST = {
   'cc.Animation': ['_defaultClip'],
 };
 
+// 确定性空间换算:Canvas 世界矩形 + 节点九宫格/百分比事实(纯数学,零语义判断)
+function canvasRectOf(scene) {
+  function find(n) {
+    try { if (n.getComponent('cc.Canvas')) return n; } catch (e) { /* 忽略 */ }
+    for (const c of n.children || []) {
+      const r = find(c);
+      if (r) return r;
+    }
+    return null;
+  }
+  const canvas = find(scene);
+  if (!canvas) return null;
+  const ut = canvas.getComponent('cc.UITransform');
+  if (!ut) return null;
+  const w = ut.width, h = ut.height;
+  const wp = canvas.worldPosition;
+  return {
+    w, h,
+    left: wp.x - w * ut.anchorX,
+    bottom: wp.y - h * ut.anchorY,
+    right: wp.x + w * (1 - ut.anchorX),
+    top: wp.y + h * (1 - ut.anchorY),
+  };
+}
+
+function layoutFacts(node, rect) {
+  if (!rect) return null;
+  const wp = node.worldPosition;
+  if (!wp || typeof wp.x !== 'number') return null;
+  const relX = rect.w ? (wp.x - rect.left) / rect.w : 0;
+  const relY = rect.h ? (wp.y - rect.bottom) / rect.h : 0;
+  const zoneH = relX < 1 / 3 ? 'left' : relX < 2 / 3 ? 'center' : 'right';
+  const zoneV = relY < 1 / 3 ? 'bottom' : relY < 2 / 3 ? 'middle' : 'top';
+  const facts = {
+    pct: { x: Math.round(relX * 1000) / 1000, y: Math.round(relY * 1000) / 1000 },
+    zone: zoneV + '-' + zoneH,
+  };
+  if (wp.x < rect.left || wp.x > rect.right || wp.y < rect.bottom || wp.y > rect.top) {
+    facts.outOfCanvas = true;
+  }
+  return facts;
+}
+
+// 语义定位换算:anchor(+margin)→ 世界坐标;纯数学,语义意图由 Agent 给出
+function resolvePlacement(scene, args) {
+  if (args.position) {
+    return {
+      x: Number(args.position.x) || 0,
+      y: Number(args.position.y) || 0,
+      z: Number(args.position.z) || 0,
+    };
+  }
+  const rect = canvasRectOf(scene);
+  if (!rect) return null;
+  const m = args.margin || {};
+  if (args.anchor) {
+    const parts = String(args.anchor).split('-');
+    const vx = parts[1] || parts[0];
+    const vy = parts[1] ? parts[0] : 'middle';
+    const x = vx === 'left' ? rect.left + (Number(m.left) || 0)
+      : vx === 'right' ? rect.right - (Number(m.right) || 0)
+      : rect.left + rect.w / 2;
+    const y = vy === 'bottom' ? rect.bottom + (Number(m.bottom) || 0)
+      : vy === 'top' ? rect.top - (Number(m.top) || 0)
+      : rect.bottom + rect.h / 2;
+    return { x, y, z: 0 };
+  }
+  if (args.relative) {
+    const base = findByUuid(scene, args.relative.to);
+    if (base) {
+      const b = base.worldPosition;
+      return {
+        x: b.x + (Number(args.relative.dxPct) || 0) * rect.w,
+        y: b.y + (Number(args.relative.dyPct) || 0) * rect.h,
+        z: 0,
+      };
+    }
+  }
+  return null;
+}
+
 module.exports = {
   load() {},
   unload() {},
@@ -145,6 +226,51 @@ module.exports = {
     },
 
     // ============ 感知原语 ============
+
+    // 确定性事实汇编:每节点一行(九宫格/百分比/尺寸/组件/激活态)+ 空容器/越界统计。
+    // 只做数学换算;功能语义由 Agent 从组件与命名自行推断。
+    scene_summary(args) {
+      const scene = cc.director.getScene();
+      if (!scene) return { error: 'no active scene' };
+      const rect = canvasRectOf(scene);
+      const maxDepth = Math.min(Number(args && args.maxDepth) || 8, 14);
+      const stats = { nodes: 0, emptyContainers: 0, outOfCanvas: 0, inactive: 0 };
+      const compStats = {};
+      const lines = [];
+
+      function walk(n, indent) {
+        stats.nodes++;
+        const comps = componentNames(n);
+        for (const c of comps) compStats[c] = (compStats[c] || 0) + 1;
+        const facts = rect ? layoutFacts(n, rect) : null;
+        if (facts && facts.outOfCanvas) stats.outOfCanvas++;
+        const kids = n.children || [];
+        if (kids.length === 0) stats.emptyContainers++;
+        let line = '  '.repeat(indent) + '- ' + (n.name || '');
+        if (facts) line += ' @' + facts.zone + ' (' + Math.round(facts.pct.x * 100) + '%,' + Math.round(facts.pct.y * 100) + '%)';
+        const sz = spatialInfo(n).contentSize;
+        if (sz && (sz.w || sz.h)) line += ' ' + sz.w + 'x' + sz.h;
+        if (comps.length) line += ' [' + comps.join(',') + ']';
+        if (!n.activeInHierarchy) { line += ' (inactive)'; stats.inactive++; }
+        if (kids.length === 0) line += ' (empty)';
+        lines.push(line);
+        for (const k of kids) walk(k, indent + 1);
+      }
+
+      for (const top of scene.children || []) {
+        if (top.name === 'Editor Scene Foreground' || top.name === 'Editor Scene Background') continue;
+        walk(top, 0);
+      }
+
+      return {
+        scene: { name: scene.name, uuid: scene.uuid },
+        canvas: rect ? { width: rect.w, height: rect.h } : null,
+        stats,
+        componentStats: compStats,
+        tree: lines,
+        note: 'zone/pct 为相对画布的确定性换算(九宫格+百分比);功能语义不在本接口职责内',
+      };
+    },
 
     scene_info() {
       const s = cc.director.getScene();
@@ -215,12 +341,11 @@ module.exports = {
       node.name = args.name || 'NewNode';
       try { node.addComponent('cc.UITransform'); } catch (e) { /* 非 UI 环境无 UITransform */ }
       node.setParent(parent);
-      if (args.position) {
-        node.setWorldPosition(
-          Number(args.position.x) || 0,
-          Number(args.position.y) || 0,
-          Number(args.position.z) || 0
-        );
+      const placement = resolvePlacement(scene, args);
+      if (placement) {
+        node.setWorldPosition(placement.x, placement.y, placement.z || 0);
+      } else {
+        node.setPosition(0, 0, 0);
       }
       if (Array.isArray(args.color)) applyProps(node, { color: args.color });
       const compErrors = [];
@@ -260,7 +385,12 @@ module.exports = {
       const node = scene && findByUuid(scene, args && args.uuid);
       if (!node) return { error: 'node not found: ' + (args && args.uuid) };
       const p = args.props || {};
-      if (p.position) node.setWorldPosition(Number(p.position.x) || 0, Number(p.position.y) || 0, Number(p.position.z) || 0);
+      if (p.position) {
+        node.setWorldPosition(Number(p.position.x) || 0, Number(p.position.y) || 0, Number(p.position.z) || 0);
+      } else if (p.anchor || p.margin || p.relative) {
+        const placement = resolvePlacement(scene, { anchor: p.anchor, margin: p.margin, relative: p.relative });
+        if (placement) node.setWorldPosition(placement.x, placement.y, placement.z || 0);
+      }
       if (typeof p.name === 'string') node.name = p.name;
       if (typeof p.active === 'boolean') node.active = p.active;
       if (typeof p.angle === 'number') node.angle = p.angle;
