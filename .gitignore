@@ -1,0 +1,11 @@
+# Node / 编辑器临时文件
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Cocos Creator 若在本目录内开过测试项目会产生的目录
+library/
+temp/
+local/
+profiles/
