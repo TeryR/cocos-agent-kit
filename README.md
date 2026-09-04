@@ -86,24 +86,72 @@ MCP server 直接内嵌在编辑器扩展里,零 npm 依赖,拷贝即用,不需�
 
 "待真机校准"的含义见 `docs/design.md` 的校准清单:代码里的 API 调用基于公开文档与惯用签名,首次在真实 Cocos Creator 3.8.x 里加载后需逐项核对,字段映射已在代码中做防御性处理。
 
-## 快速开始
+## 快速开始(5 分钟,从 fork 到可用)
 
-1. **装载扩展**:把 `extension/` 文件夹复制(或建链接)到 Cocos 项目的 `extensions/cocos-sense/` 下,在编辑器「扩展管理器」中启用。
-2. **确认服务**:启用后扩展会监听 `http://127.0.0.1:7420/mcp`。验证:
-   ```bash
-   curl http://127.0.0.1:7420/health
-   ```
-3. **接入 Agent**(以 Claude Code 为例):
-   ```bash
-   claude mcp add --transport http cocos-sense http://127.0.0.1:7420/mcp
-   ```
-   Cursor / ZCode 等在 MCP 配置里添加同 URL 即可。
-4. **试一发**:
-   ```bash
-   curl -s -X POST http://127.0.0.1:7420/mcp \
-     -H "Content-Type: application/json" \
-     -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"scene_tree","arguments":{"maxDepth":3}}}'
-   ```
+### 前置条件
+
+- Cocos Creator **3.8.x**(3.8.6+ 实测过,3.7 未验证)
+- 任意支持 MCP(Streamable HTTP)的 Agent 客户端:Claude Code / Cursor / Cline / ZCode 等
+- 一个你自己的 Cocos 游戏项目
+
+### 第 1 步:安装扩展
+
+把本仓库的 `extension/` 文件夹整体拷贝到你项目的 `extensions/cocos-sense/`(没有 `extensions` 目录就新建):
+
+```
+你的项目/
+└── extensions/
+    └── cocos-sense/        ← extension/ 的内容
+        ├── package.json
+        ├── main.js
+        └── ...
+```
+
+### 第 2 步:启用
+
+打开/刷新项目——项目内扩展**默认自动启用**。若没启用,扩展管理器 → 扩展 → cocos-sense → 开关打开。
+
+### 第 3 步:验证服务
+
+```bash
+curl http://127.0.0.1:7420/health
+# {"ok":true,"server":{"name":"cocos-sense","version":"0.2.0"}}
+```
+
+### 第 4 步:接入你的 Agent
+
+**Claude Code:**
+```bash
+claude mcp add --transport http cocos-sense http://127.0.0.1:7420/mcp
+```
+
+**Cursor / Cline 等**(mcp.json):
+```json
+{
+  "mcpServers": {
+    "cocos-sense": { "url": "http://127.0.0.1:7420/mcp" }
+  }
+}
+```
+
+### 第 5 步:冒烟测试
+
+对你的 Agent 说:**"列出当前 Cocos 场景的节点树"**。它调用 `scene_tree` 并返回真实场景数据(节点名/UUID/世界坐标/组件)= 全链路打通。
+
+### 排查表
+
+| 症状 | 原因与解法 |
+|---|---|
+| `/health` 不通 | 扩展未启用 → 扩展管理器检查;或开了多个编辑器实例抢 7420 → **关掉多余的编辑器**(单端口单实例) |
+| 编辑器控制台报 `EADDRINUSE` | 同上,另一个实例占了端口 |
+| 场景树返回 error: no active scene | 编辑器里还没打开任何场景 → 双击一个 .scene |
+| 工具调用报 spread / undefined 错误 | 你拿到的是旧版扩展,拉最新仓库并重新加载 |
+
+### ⚠️ 安全须知
+
+- `act_` 系列工具会**真实修改你的场景**并可通过 `save_scene` 落盘——操作前请确保项目在 git 干净状态,或已手动保存备份;
+- 感知工具全部只读,无风险;
+- 服务只监听 `127.0.0.1`,不对外网暴露。
 
 ## 配套文档
 
