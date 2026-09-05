@@ -290,9 +290,21 @@ module.exports = {
         walk(top, 0);
       }
 
+      // 环境自描述:坐标系与关键约定随数据返回,Agent 零文档成本获得正确心智模型
+      const conventions = {
+        worldOrigin: '左下角(scene_tree 的 worldPosition)',
+        childPositionOrigin: rect
+          ? '画布中心(Canvas 锚点 0.5,子节点 position x∈[' + (-rect.w / 2) + ',' + (rect.w / 2) + '] y∈[' + (-rect.h / 2) + ',' + (rect.h / 2) + '])'
+          : null,
+        screenEventOrigin: '左下角(触摸/鼠标 getUILocation,与子节点 position 差半宽半高)',
+        beforePreview: 'save_scene(预览读磁盘)后手动刷新预览页',
+        visibleSprite: '需要 spriteFrame;内置单色图 uuid 7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941 + color 染色',
+        logicNode: '纯逻辑容器不要挂 Sprite(不可见即正确)',
+      };
       return {
         scene: { name: scene.name, uuid: scene.uuid },
         uiCanvas: rect ? { width: rect.w, height: rect.h } : null,
+        conventions,
         stats,
         componentStats: compStats,
         tree: lines,
