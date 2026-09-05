@@ -465,13 +465,17 @@ module.exports = {
       const scene = cc.director.getScene();
       const node = scene && findByUuid(scene, args && args.uuid);
       if (!node) return { error: 'node not found: ' + (args && args.uuid) };
+      // 前缀 fallback:内置组件注册名带 cc. 前缀('cc.RigidBody2D'),裸名/全名都尝试
+      let comp = node.getComponent(args.type) || node.getComponent('cc.' + args.type);
+      if (!comp) {
+        return { removed: false, note: 'component not found (already removed?): ' + args.type, components: componentNames(node) };
+      }
       try {
-        const comp = node.getComponent(args.type);
-        if (comp) node.removeComponent(comp);
+        node.removeComponent(comp);
       } catch (e) {
         return { error: 'removeComponent failed: ' + String((e && e.message) || e) };
       }
-      return { components: componentNames(node) };
+      return { removed: true, removedType: args.type, components: componentNames(node) };
     },
 
     act_reparent(args) {
