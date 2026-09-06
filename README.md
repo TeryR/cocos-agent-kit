@@ -26,6 +26,8 @@
 
 ### Step 1: Install the extension
 
+> **AI Agent reading this?** Start with [`AGENTS.md`](AGENTS.md) at the repo root — install steps, the operating manual (`skills/cocos-agent-kit/SKILL.md`), and iron rules.
+
 Copy the `extension/` folder from this repo into your project as `extensions/cocos-agent-kit/`
 (create the `extensions` directory if missing):
 
