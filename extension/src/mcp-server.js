@@ -51,6 +51,30 @@ class McpHttpServer {
       return this._json(res, 200, { ok: true, server: this.serverInfo });
     }
 
+    // 游戏状态探针:游戏页面里的 probe 片段 POST 运行时状态/错误到这里
+    if (req.method === 'POST' && url === '/probe') {
+      const body = await this._readBody(req);
+      if (!global.__cakProbes) global.__cakProbes = [];
+      try {
+        global.__cakProbes.push({ at: Date.now(), data: JSON.parse(body) });
+        if (global.__cakProbes.length > 1000) global.__cakProbes.splice(0, global.__cakProbes.length - 1000);
+      } catch (e) { /* 忽略坏包 */ }
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      return res.end();
+    }
+    if (req.method === 'OPTIONS' && url === '/probe') {
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      });
+      return res.end();
+    }
+
     if (req.method === 'POST' && url === '/mcp') {
       const body = await this._readBody(req);
       let msg;

@@ -5,6 +5,7 @@
 
 const { TOOLS_BASE, dispatchBase } = require('./tools-base');
 const assetInspect = require('./asset-inspect');
+const { runFeedback } = require('./run-feedback');
 const { buildMetaIndex } = require('./asset-inspect');
 
 function sceneScript(method, args) {
@@ -109,6 +110,18 @@ const EXTRA_TOOLS = [
     name: 'preview_info',
     description: 'Preview service URL and trigger hints. Run-feedback loop: preview, then console_logs for errors.',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'run_feedback',
+    description:
+      'RUNTIME FEEDBACK (the closed loop): launch headless Chrome on the preview URL and return runtime console logs (JS errors, Uncaught) + game SCREENSHOTS at two time points (motion detection by comparing them). Call after save_scene whenever you want to SEE the game running instead of guessing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'preview URL, default http://localhost:7456' },
+        budgetsMs: { type: 'array', description: 'virtual-time budgets for screenshots, default [3000, 8000]' },
+      },
+    },
   },
   {
     name: 'debug_assets',
@@ -227,6 +240,16 @@ const DISPATCH_EXTRA = {
   scene_list: async () => textResult(assetInspect.sceneList()),
   console_logs: async (args) => textResult(assetInspect.consoleLogs(args || {})),
   preview_info: async () => textResult(assetInspect.previewInfo()),
+  run_feedback: async (args) => {
+    const r = await runFeedback(args || {});
+    const shots = r._shotsInternal || [];
+    delete r._shotsInternal;
+    const content = [{ type: 'text', text: JSON.stringify(r, null, 2) }];
+    for (const s of shots) {
+      content.push({ type: 'image', data: s.base64, mimeType: 'image/png' });
+    }
+    return { content };
+  },
   debug_assets: async (args) => textResult(await sceneScript('debug_assets', args || {})),
   act_set_property: async (args) => {
     if (!args || !args.uuid || !args.path || !args.dump) {
