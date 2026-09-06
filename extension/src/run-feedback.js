@@ -25,15 +25,24 @@ function findChrome() {
 }
 
 // 单次捕获:跑 budgetMs 虚拟时间,收 console + 一张截图
+// 注意:每个 budget 是一次独立 Chrome 生命周期(boot 序列会重复),游戏状态各自从零开始。
 function captureOnce(chrome, url, budgetMs, shotPath) {
   return new Promise((resolve) => {
+    // user-data-dir 必须是纯 ASCII 路径:含非 ASCII(如中文)时 Chrome 静默拒绝启动(实测)。
+    let profileDir = path.join(os.tmpdir(), 'cocos-agent-kit-chrome-' + Date.now());
+    if (/[^\x00-\x7F]/.test(profileDir)) profileDir = 'C:\\cak-chrome-profile-' + Date.now();
     const args = [
       // 不用 headless:无头模式无 WebGL,Cocos 引擎到渲染器创建即停,游戏不执行(实测)。
       // 用屏幕外可见窗口:WebGL 正常、游戏真实运行;视觉上接近无感,运行后自动退出。
       '--window-position=-32000,-32000',
+      // 屏幕外窗口会被 Chrome 判定为"被遮挡",rAF 节流到 0 → 游戏循环停摆、球冻结(实测:
+      // 无这些参数时 tick 心跳仍在但 gameState 恒定不变;加上后 71s 连续运行零冻结)。
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-features=CalculateNativeWinOcclusion',
       '--no-first-run',
       '--no-default-browser-check',
-      '--user-data-dir=' + path.join(os.tmpdir(), 'cocos-agent-kit-chrome-' + Date.now()),
+      '--user-data-dir=' + profileDir,
       '--window-size=1334,750',
       '--timeout=' + budgetMs,
       '--enable-logging=stderr',
