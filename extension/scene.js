@@ -300,7 +300,7 @@ module.exports = {
         beforePreview: 'save_scene(预览读磁盘)后手动刷新预览页',
         visibleSprite: '需要 spriteFrame;内置单色图 uuid 7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941 + color 染色',
         logicNode: '纯逻辑容器不要挂 Sprite(不可见即正确)',
-        sizeGroundTruth: '物理/碰撞/布局判定必须用 node_detail 的 contentSize 实测值;脚本内硬编码尺寸是未验证声明,可能与实体漂移(实测案例:碰撞盒写 70×10 真身 140×20,可见顶面 33% 死区)',
+        sizeGroundTruth: 'node_detail 的 contentSize 是尺寸事实,脚本硬编码尺寸只是未验证声明,两者可能不一致。判定盒与视觉的关系(1:1/缩小/放大/异形)由游戏需求决定——插件的责任是让你知道两者各是多少,别把"没做过的决定"当成"做过的"',
       };
       return {
         scene: { name: scene.name, uuid: scene.uuid },
