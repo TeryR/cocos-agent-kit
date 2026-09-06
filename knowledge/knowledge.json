@@ -1,0 +1,177 @@
+{
+  "$comment": "cocos-agent-kit 知识单一源。所有载体(SKILL.md 铁律/坑位、scene.js conventions、MCP initialize instructions)由 tools/build-knowledge.js 从此编译。修改知识只改这个文件,然后 node tools/build-knowledge.js。layers 可多选:skill-iron/skill-pitfall/convention/instructions",
+  "entries": [
+    {
+      "id": "proc.editor-owner",
+      "layers": [
+        "skill-iron",
+        "instructions"
+      ],
+      "origin": "2026-09-04 野实例事故;2026-09-06 另一会话中途重启编辑器(规则当时未进 skill)",
+      "text": "**编辑器进程归用户管**:永不启动、永不关闭、永不重启 CocosCreator——包括 7420 连不上、编辑器卡死或崩溃的场景(此时报告用户并等待处置)。只允许终止**自己启动的**进程,且必须凭启动时记录的 PID,禁止按进程名/时间猜杀"
+    },
+    {
+      "id": "act.perceive-first",
+      "layers": [
+        "skill-iron",
+        "instructions"
+      ],
+      "origin": "v0.2 起核心循环",
+      "text": "**创建/修改类操作前,先用信息原语确认现状**:`create_scene` 前查 `scene_list`(目标场景是否已存在);`act_create_node` 前查 `scene_tree`(父节点是否存在、放哪里合适);`act_add_component` 前查组件是否已挂。现状检查是原语调用,判断是你自己的推理"
+    },
+    {
+      "id": "act.uuid-no-guess",
+      "layers": [
+        "skill-iron"
+      ],
+      "origin": "v0.2",
+      "text": "**动手前先感知**:`scene_summary` 十秒读懂场景,`scene_tree` 拿 uuid——所有 act 工具都需要目标 uuid,不许猜"
+    },
+    {
+      "id": "act.readback",
+      "layers": [
+        "skill-iron",
+        "instructions"
+      ],
+      "origin": "v0.2",
+      "text": "**act 的返回值就是回读**:检查返回的 created/readback/组件列表,确认操作真实生效"
+    },
+    {
+      "id": "flow.save-refresh",
+      "layers": [
+        "skill-iron",
+        "instructions"
+      ],
+      "origin": "2026-09-04 预览不一致事故",
+      "text": "**改完必须 `save_scene`**;**文件级改动(脚本/prefab/贴图)必须 `refresh_assets`**"
+    },
+    {
+      "id": "flow.scene-open",
+      "layers": [
+        "skill-iron",
+        "instructions"
+      ],
+      "origin": "2026-09-05 实体属性与预览不一致",
+      "text": "**编辑器里必须已打开目标场景**:用 `scene_info` 对照 `scene_list` 确认,不符就请用户双击目标场景"
+    },
+    {
+      "id": "flow.git-before-destroy",
+      "layers": [
+        "skill-iron"
+      ],
+      "origin": "安全底线",
+      "text": "**涉及删除或批量修改:先让用户 git commit**"
+    },
+    {
+      "id": "semantics.agent-owns",
+      "layers": [
+        "skill-iron"
+      ],
+      "origin": "产品定位(v0.4):信息×操作,不替 Agent 判断",
+      "text": "**语义推断是你自己的工作**:工具返回九宫格/百分比/尺寸等确定性事实和组件类名,\"这是刀还是按钮\"由你从证据推断,工具不会也不该给你贴标签"
+    },
+    {
+      "id": "pitfall.physics-setposition",
+      "layers": [
+        "skill-pitfall"
+      ],
+      "origin": "BlockRun M1 教训",
+      "text": "**纯逻辑游戏别挂物理组件**(RigidBody2D 与逐帧 setPosition 打架:斜飞/瞬移/穿模)——自写位置积分 + AABB"
+    },
+    {
+      "id": "pitfall.script-abs-path",
+      "layers": [
+        "skill-pitfall"
+      ],
+      "origin": "2026-09-05",
+      "text": "**脚本必须写到游戏项目 `assets/` 绝对路径**,写完 refresh_assets 再挂载"
+    },
+    {
+      "id": "pitfall.property-serialize",
+      "layers": [
+        "skill-pitfall"
+      ],
+      "origin": "cutfruit 调参",
+      "text": "**@property 序列化值优先于脚本默认值**——改默认后要重设已挂实例"
+    },
+    {
+      "id": "pitfall.debug-hud",
+      "layers": [
+        "skill-pitfall"
+      ],
+      "origin": "2026-09-06 v0.6 前",
+      "text": "**运行时反馈用调试 HUD**(信息写到场景 Label)——浏览器 Console 你看不到;判运动必须前台预览"
+    },
+    {
+      "id": "pitfall.busy-retry",
+      "layers": [
+        "skill-pitfall"
+      ],
+      "origin": "压测",
+      "text": "间歇报错先重试(编辑器忙态),2 秒后再查"
+    },
+    {
+      "id": "conv.world-origin",
+      "layers": [
+        "convention"
+      ],
+      "origin": "坐标系事实",
+      "text": "左下角(scene_tree 的 worldPosition)",
+      "key": "worldOrigin"
+    },
+    {
+      "id": "conv.child-position-origin",
+      "layers": [
+        "convention"
+      ],
+      "origin": "坐标系事实(动态:随画布尺寸计算)",
+      "code": "rect ? '画布中心(Canvas 锚点 0.5,子节点 position x∈[' + (-rect.w / 2) + ',' + (rect.w / 2) + '] y∈[' + (-rect.h / 2) + ',' + (rect.h / 2) + '])' : null",
+      "key": "childPositionOrigin"
+    },
+    {
+      "id": "conv.screen-event-origin",
+      "layers": [
+        "convention"
+      ],
+      "origin": "坐标系事实",
+      "text": "左下角(触摸/鼠标 getUILocation,与子节点 position 差半宽半高)",
+      "key": "screenEventOrigin"
+    },
+    {
+      "id": "conv.before-preview",
+      "layers": [
+        "convention"
+      ],
+      "origin": "2026-09-04 预览不一致事故",
+      "text": "save_scene(预览读磁盘)后手动刷新预览页",
+      "key": "beforePreview"
+    },
+    {
+      "id": "conv.visible-sprite",
+      "layers": [
+        "convention"
+      ],
+      "origin": "打砖块白方块修复",
+      "text": "需要 spriteFrame;内置单色图 uuid 7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941 + color 染色",
+      "key": "visibleSprite"
+    },
+    {
+      "id": "conv.logic-node",
+      "layers": [
+        "convention"
+      ],
+      "origin": "fps-3d 测试",
+      "text": "纯逻辑容器不要挂 Sprite(不可见即正确)",
+      "key": "logicNode"
+    },
+    {
+      "id": "conv.size-ground-truth",
+      "layers": [
+        "convention"
+      ],
+      "origin": "2026-09-06 打砖块碰撞盒半尺寸事故;master 架构纠偏(关系由需求定)",
+      "text": "node_detail 的 contentSize 是尺寸事实,脚本硬编码尺寸只是未验证声明,两者可能不一致。判定盒与视觉的关系(1:1/缩小/放大/异形)由游戏需求决定——插件的责任是让你知道两者各是多少,别把\"没做过的决定\"当成\"做过的\"",
+      "key": "sizeGroundTruth"
+    }
+  ]
+}

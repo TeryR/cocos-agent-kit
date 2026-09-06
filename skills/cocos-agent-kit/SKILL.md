@@ -9,21 +9,39 @@ description: 使用 cocos-agent-kit MCP 工具操作 Cocos Creator 编辑器时�
 
 ## 铁律(违反=返工或事故)
 
-1. **编辑器进程归用户管**:永不启动、永不关闭、永不重启 CocosCreator——包括 7420 连不上、编辑器卡死或崩溃的场景(此时报告用户并等待处置)。只允许终止**自己启动的**进程,且必须凭启动时记录的 PID,禁止按进程名/时间猜杀;
-2. **创建/修改类操作前,先用信息原语确认现状**:`create_scene` 前查 `scene_list`(目标场景是否已存在);`act_create_node` 前查 `scene_tree`(父节点是否存在、放哪里合适);`act_add_component` 前查组件是否已挂。现状检查是原语调用,判断是你自己的推理;
-3. **动手前先感知**:`scene_summary` 十秒读懂场景,`scene_tree` 拿 uuid——所有 act 工具都需要目标 uuid,不许猜;
-4. **act 的返回值就是回读**:检查返回的 created/readback/组件列表,确认操作真实生效;
-5. **改完必须 `save_scene`**;**文件级改动(脚本/prefab/贴图)必须 `refresh_assets`**;
-6. **编辑器里必须已打开目标场景**:用 `scene_info` 对照 `scene_list` 确认,不符就请用户双击目标场景;
-7. **涉及删除或批量修改:先让用户 git commit**;
-8. **语义推断是你自己的工作**:工具返回九宫格/百分比/尺寸等确定性事实和组件类名,"这是刀还是按钮"由你从证据推断,工具不会也不该给你贴标签。
+<!-- GEN:iron:BEGIN -->
+1. **编辑器进程归用户管**:永不启动、永不关闭、永不重启 CocosCreator——包括 7420 连不上、编辑器卡死或崩溃的场景(此时报告用户并等待处置)。只允许终止**自己启动的**进程,且必须凭启动时记录的 PID,禁止按进程名/时间猜杀
+2. **创建/修改类操作前,先用信息原语确认现状**:`create_scene` 前查 `scene_list`(目标场景是否已存在);`act_create_node` 前查 `scene_tree`(父节点是否存在、放哪里合适);`act_add_component` 前查组件是否已挂。现状检查是原语调用,判断是你自己的推理
+3. **动手前先感知**:`scene_summary` 十秒读懂场景,`scene_tree` 拿 uuid——所有 act 工具都需要目标 uuid,不许猜
+4. **act 的返回值就是回读**:检查返回的 created/readback/组件列表,确认操作真实生效
+5. **改完必须 `save_scene`**;**文件级改动(脚本/prefab/贴图)必须 `refresh_assets`**
+6. **编辑器里必须已打开目标场景**:用 `scene_info` 对照 `scene_list` 确认,不符就请用户双击目标场景
+7. **涉及删除或批量修改:先让用户 git commit**
+8. **语义推断是你自己的工作**:工具返回九宫格/百分比/尺寸等确定性事实和组件类名,"这是刀还是按钮"由你从证据推断,工具不会也不该给你贴标签
+<!-- GEN:iron:END -->
+
+
+
+
+
+
 
 ## 空间与坐标
 
 - 一律使用**世界坐标**(act 的 position/worldPosition 与 scene_tree 返回一致,可直接比对);
 - 2D 约定:原点左下,y 向上;z 影响渲染顺序(同层级用 `act_set_sibling_index`);
-- **可视范围 = Canvas 的 contentSize**(先读它,常见 960×640 / 1280×720),别把东西摆出画布;
-- **语义定位,不要心算像素**:`act_create_node` 支持 `anchor: "top-right", margin: {right: 60, top: 120}`(九宫格+边距)和 `relative: {to: uuid, dxPct, dyPct}`(相对某节点偏移画布百分比);
+<!-- GEN:pitfalls:BEGIN -->
+- **纯逻辑游戏别挂物理组件**(RigidBody2D 与逐帧 setPosition 打架:斜飞/瞬移/穿模)——自写位置积分 + AABB
+- **脚本必须写到游戏项目 `assets/` 绝对路径**,写完 refresh_assets 再挂载
+- **@property 序列化值优先于脚本默认值**——改默认后要重设已挂实例
+- **运行时反馈用调试 HUD**(信息写到场景 Label)——浏览器 Console 你看不到;判运动必须前台预览
+- 间歇报错先重试(编辑器忙态),2 秒后再查
+<!-- GEN:pitfalls:END -->
+
+
+
+
+
 - `scene_summary` 的每个节点自带 `@zone (pct%,pct%)` 空间事实——放完东西重跑一次,zone/pct 变化即验收;
 - TiledMap 节点带 `tiledMap.tileSize/mapSize`,像素坐标 ↔ 格子坐标用它换算。
 
@@ -76,11 +94,14 @@ description: 使用 cocos-agent-kit MCP 工具操作 Cocos Creator 编辑器时�
 
 ## 血泪坑位(仅保留环境未承载的;坐标系/预览刷新/内置图 uuid 等事实已随 scene_summary 的 conventions 块自动返回,无需记忆)
 
-- **纯逻辑游戏别挂物理组件**(RigidBody2D 与逐帧 setPosition 打架:斜飞/瞬移/穿模)——自写位置积分 + AABB;
-- **脚本必须写到游戏项目 `assets/` 绝对路径**,写完 refresh_assets 再挂载;
-- **@property 序列化值优先于脚本默认值**——改默认后要重设已挂实例;
-- **运行时反馈用调试 HUD**(信息写到场景 Label)——浏览器 Console 你看不到;判运动必须前台预览;
-- 间歇报错先重试(编辑器忙态),2 秒后再查。
+<!-- GEN:pitfalls:BEGIN -->
+- **纯逻辑游戏别挂物理组件**(RigidBody2D 与逐帧 setPosition 打架:斜飞/瞬移/穿模)——自写位置积分 + AABB
+- **脚本必须写到游戏项目 `assets/` 绝对路径**,写完 refresh_assets 再挂载
+- **@property 序列化值优先于脚本默认值**——改默认后要重设已挂实例
+- **运行时反馈用调试 HUD**(信息写到场景 Label)——浏览器 Console 你看不到;判运动必须前台预览
+- 间歇报错先重试(编辑器忙态),2 秒后再查
+<!-- GEN:pitfalls:END -->
+
 
 ## 已知边界与坑
 

@@ -1,0 +1,3 @@
+// GEN-FILE: 由 tools/build-knowledge.js 生成,勿手改;源: knowledge/knowledge.json
+'use strict';
+module.exports.instructions = "cocos-agent-kit | Cocos Creator 编辑器操作 MCP。服务级纪律:\n- 编辑器进程归用户管:永不启动、永不关闭、永不重启 CocosCreator——包括 7420 连不上、编辑器卡死或崩溃的场景(此时报告用户并等待处置)。只允许终止自己启动的进程,且必须凭启动时记录的 PID,禁止按进程名/时间猜杀\n- 创建/修改类操作前,先用信息原语确认现状:create_scene 前查 scene_list(目标场景是否已存在);act_create_node 前查 scene_tree(父节点是否存在、放哪里合适);act_add_component 前查组件是否已挂。现状检查是原语调用,判断是你自己的推理\n- act 的返回值就是回读:检查返回的 created/readback/组件列表,确认操作真实生效\n- 改完必须 save_scene;文件级改动(脚本/prefab/贴图)必须 refresh_assets\n- 编辑器里必须已打开目标场景:用 scene_info 对照 scene_list 确认,不符就请用户双击目标场景";

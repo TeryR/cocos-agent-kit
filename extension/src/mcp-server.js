@@ -1,5 +1,10 @@
 'use strict';
 
+// 服务级 instructions(MCP initialize 握手携带;由 knowledge/knowledge.json 编译生成)
+let serverInstructions = '';
+try { serverInstructions = require('./server-instructions').instructions || ''; } catch (e) { /* 未生成时为空 */ }
+
+
 // 零依赖 MCP Streamable HTTP server(只实现本扩展需要的最小子集,ADR-2):
 //   POST /mcp  -> JSON-RPC(initialize / notifications / tools/list / tools/call / ping)
 //   GET /health -> 存活探针
@@ -119,6 +124,8 @@ class McpHttpServer {
             protocolVersion: (params && params.protocolVersion) || '2025-06-18',
             capabilities: { tools: {} },
             serverInfo: this.serverInfo,
+            // 服务级纪律(单一源编译,客户端支持不一,仅作 conventions/skill 之外的补充载体)
+            instructions: serverInstructions,
           },
         };
 

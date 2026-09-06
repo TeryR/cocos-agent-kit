@@ -291,17 +291,23 @@ module.exports = {
       }
 
       // 环境自描述:坐标系与关键约定随数据返回,Agent 零文档成本获得正确心智模型
+      // GEN:conventions:BEGIN — 由 tools/build-knowledge.js 生成,勿手改;源: knowledge/knowledge.json
       const conventions = {
-        worldOrigin: '左下角(scene_tree 的 worldPosition)',
-        childPositionOrigin: rect
-          ? '画布中心(Canvas 锚点 0.5,子节点 position x∈[' + (-rect.w / 2) + ',' + (rect.w / 2) + '] y∈[' + (-rect.h / 2) + ',' + (rect.h / 2) + '])'
-          : null,
-        screenEventOrigin: '左下角(触摸/鼠标 getUILocation,与子节点 position 差半宽半高)',
-        beforePreview: 'save_scene(预览读磁盘)后手动刷新预览页',
-        visibleSprite: '需要 spriteFrame;内置单色图 uuid 7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941 + color 染色',
-        logicNode: '纯逻辑容器不要挂 Sprite(不可见即正确)',
-        sizeGroundTruth: 'node_detail 的 contentSize 是尺寸事实,脚本硬编码尺寸只是未验证声明,两者可能不一致。判定盒与视觉的关系(1:1/缩小/放大/异形)由游戏需求决定——插件的责任是让你知道两者各是多少,别把"没做过的决定"当成"做过的"',
+        worldOrigin: "左下角(scene_tree 的 worldPosition)",
+        childPositionOrigin: rect ? '画布中心(Canvas 锚点 0.5,子节点 position x∈[' + (-rect.w / 2) + ',' + (rect.w / 2) + '] y∈[' + (-rect.h / 2) + ',' + (rect.h / 2) + '])' : null,
+        screenEventOrigin: "左下角(触摸/鼠标 getUILocation,与子节点 position 差半宽半高)",
+        beforePreview: "save_scene(预览读磁盘)后手动刷新预览页",
+        visibleSprite: "需要 spriteFrame;内置单色图 uuid 7d8f9b89-4fd1-4c9f-a3ab-38ec7cded7ca@f9941 + color 染色",
+        logicNode: "纯逻辑容器不要挂 Sprite(不可见即正确)",
+        sizeGroundTruth: "node_detail 的 contentSize 是尺寸事实,脚本硬编码尺寸只是未验证声明,两者可能不一致。判定盒与视觉的关系(1:1/缩小/放大/异形)由游戏需求决定——插件的责任是让你知道两者各是多少,别把\"没做过的决定\"当成\"做过的\"",
       };
+      // GEN:conventions:END
+
+
+
+
+
+
       return {
         scene: { name: scene.name, uuid: scene.uuid },
         uiCanvas: rect ? { width: rect.w, height: rect.h } : null,
